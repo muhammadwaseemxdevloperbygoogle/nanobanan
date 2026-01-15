@@ -34,36 +34,82 @@ function wasi_loadPlugins() {
     }
 }
 
+const QRCode = require('qrcode');
+
+// Global state for web dashboard
+let currentQR = null;
+let isConnected = false;
+let isDbConnected = false;
+
+// Serve static files
+wasi_app.use(express.static(path.join(__dirname, 'public')));
+
+// API endpoint for status and QR code
+wasi_app.get('/api/status', async (req, res) => {
+    let qrDataUrl = null;
+    if (currentQR) {
+        try {
+            qrDataUrl = await QRCode.toDataURL(currentQR, { width: 256 });
+        } catch (e) { }
+    }
+    res.json({
+        connected: isConnected,
+        qr: qrDataUrl,
+        database: isDbConnected
+    });
+});
+
+// Fallback to index.html
 wasi_app.get('/', (req, res) => {
-    res.send('Wasi WhatsApp Bot with Modules is running!');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 function wasi_startServer() {
     wasi_app.listen(wasi_port, () => {
-        console.log(`Wasi Server is running on port ${wasi_port}`);
+        console.log(`\n🌐 Web Dashboard: http://localhost:${wasi_port}`);
+        console.log(`📱 Scan QR code at the URL above or in terminal below\n`);
     });
 }
 
 async function wasi_startBot() {
-    await wasi_connectDatabase();
+    const dbResult = await wasi_connectDatabase();
+    isDbConnected = !!dbResult;
     const { wasi_sock, saveCreds } = await wasi_connectSession();
 
-    wasi_sock.ev.on('connection.update', (update) => {
+    let isReconnecting = false;
+
+    wasi_sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
+            currentQR = qr;
+            isConnected = false;
             console.log('Wasi Bot: Scan this QR Code to connect:');
             qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
-            const wasi_shouldReconnect = (lastDisconnect.error instanceof Boom) ?
-                lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut : true;
-            console.log('Wasi Bot: Connection closed, reconnecting: ', wasi_shouldReconnect);
-            if (wasi_shouldReconnect) {
-                wasi_startBot();
+            const statusCode = (lastDisconnect?.error instanceof Boom) ?
+                lastDisconnect.error.output.statusCode : 500;
+
+            // Don't reconnect if logged out or replaced by another session
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut &&
+                statusCode !== 440; // 440 = conflict/replaced
+
+            console.log(`Wasi Bot: Connection closed (${statusCode}), reconnecting: ${shouldReconnect}`);
+
+            if (shouldReconnect && !isReconnecting) {
+                isReconnecting = true;
+                // Wait 3 seconds before reconnecting to avoid rapid loops
+                setTimeout(() => {
+                    isReconnecting = false;
+                    wasi_startBot();
+                }, 3000);
             }
         } else if (connection === 'open') {
+            isReconnecting = false;
+            isConnected = true;
+            currentQR = null;
             console.log('Wasi Bot: Connected successfully!');
         }
     });
@@ -148,11 +194,13 @@ async function wasi_startBot() {
                 const shouldType = userPresenceSettings?.autoTyping ?? config.autoTyping;
                 const shouldRecord = userPresenceSettings?.autoRecording ?? config.autoRecording;
 
-                if (shouldRecord) {
-                    await wasi_sock.sendPresenceUpdate('recording', wasi_sender);
-                } else if (shouldType) {
-                    await wasi_sock.sendPresenceUpdate('composing', wasi_sender);
-                }
+                try {
+                    if (shouldRecord) {
+                        await wasi_sock.sendPresenceUpdate('recording', wasi_sender);
+                    } else if (shouldType) {
+                        await wasi_sock.sendPresenceUpdate('composing', wasi_sender);
+                    }
+                } catch (e) { /* ignore presence errors */ }
 
                 console.log(`Executing plugin: ${wasi_cmd_input}`);
                 const plugin = wasi_plugins.get(wasi_cmd_input);
@@ -179,7 +227,9 @@ async function wasi_startBot() {
                 }
 
                 // Stop presence after execution
-                await wasi_sock.sendPresenceUpdate('paused', wasi_sender);
+                try {
+                    await wasi_sock.sendPresenceUpdate('paused', wasi_sender);
+                } catch (e) { /* ignore presence errors */ }
             } else {
                 console.log('Command not found in plugins');
             }

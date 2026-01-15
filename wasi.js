@@ -10,7 +10,7 @@ module.exports = {
     prefix: '.',
     mode: process.env.MODE || 'public', // public / private put public if you want to use it in public group    
 
-    // ---------------------------------------------------------------------------
+    // -----------------------powered by mrwasi.dev----------------------------------------------------
     // TIME & REGION
     // ---------------------------------------------------------------------------
     timeZone: 'Asia/Karachi',
