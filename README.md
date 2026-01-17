@@ -117,4 +117,4 @@ All configuration is done via the **"⚙️ Configure"** button on the dashboard
 ```
 
 ---
-© 2024 WASI-MD V7 | Developed by @Itxxwasi
+© 2026 WASI-MD V7 | Developed by @Itxxwasi
