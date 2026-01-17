@@ -18,15 +18,18 @@ const wasi_userSettingsSchema = new mongoose.Schema({
     autoViewOnce: { type: Boolean, default: false }
 });
 
-const WasiToggle = mongoose.model('WasiToggle', wasi_toggleSchema);
-const WasiUserSettings = mongoose.model('WasiUserSettings', wasi_userSettingsSchema);
+const config = require('../wasi');
+const SESSION_PREFIX = config.sessionId || 'wasi_session';
+
+const WasiToggle = mongoose.models[`${SESSION_PREFIX}_Toggle`] || mongoose.model(`${SESSION_PREFIX}_Toggle`, wasi_toggleSchema);
+const WasiUserSettings = mongoose.models[`${SESSION_PREFIX}_UserSettings`] || mongoose.model(`${SESSION_PREFIX}_UserSettings`, wasi_userSettingsSchema);
 
 // Auto Reply Schema
 const wasi_autoReplySchema = new mongoose.Schema({
     trigger: { type: String, required: true },
     reply: { type: String, required: true }
 });
-const WasiAutoReply = mongoose.model('WasiAutoReply', wasi_autoReplySchema);
+const WasiAutoReply = mongoose.models[`${SESSION_PREFIX}_AutoReply`] || mongoose.model(`${SESSION_PREFIX}_AutoReply`, wasi_autoReplySchema);
 
 let isConnected = false;
 

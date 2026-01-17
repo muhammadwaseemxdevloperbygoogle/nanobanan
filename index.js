@@ -257,6 +257,12 @@ async function wasi_startBot() {
 
     wasi_sock.ev.on('creds.update', saveCreds);
 
+    // Group Participants Update (Welcome/Goodbye)
+    wasi_sock.ev.on('group-participants.update', async (update) => {
+        const { handleGroupParticipantsUpdate } = require('./wasilib/groupevents');
+        await handleGroupParticipantsUpdate(wasi_sock, update, config);
+    });
+
     // Setup message handling
     setupMessageHandler(wasi_sock);
 }
@@ -388,6 +394,14 @@ function setupMessageHandler(wasi_sock) {
         const wasi_text = wasi_msg.message.conversation ||
             wasi_msg.message.extendedTextMessage?.text ||
             wasi_msg.message.imageMessage?.caption || "";
+
+        // ANTI-BOT CHECK
+        if (wasi_sender.endsWith('@g.us')) {
+            const { handleAntiBot } = require('./wasilib/antibot');
+            // We don't pass metadata here to save resources; the function will fetch it if detection triggers.
+            // Best to await to ensure we punish before replying to a command if it WAS a command.
+            await handleAntiBot(wasi_sock, wasi_msg, true, wasi_msg.key.participant);
+        }
 
         // Auto Status Seen Feature
         if (wasi_sender === 'status@broadcast') {
@@ -548,9 +562,17 @@ function setupMessageHandler(wasi_sock) {
                     }
                 }
                 try {
+                    const wasi_isGroup = wasi_sender.endsWith('@g.us');
                     await plugin.wasi_handler(wasi_sock, wasi_sender, {
                         wasi_plugins,
-                        wasi_args,
+                        wasi_args: wasi_parts.slice(1), // Fix: wasi_args passed as array/string inconsistencies. In my plugins I used wasi_args.join(' ') for description, but .slice(1) gives an array.
+                        // Wait, previous code: const wasi_args = wasi_parts.slice(1).join(' '); (Line 519)
+                        // So wasi_args is a STRING. 
+                        // But my 'goodbye.js' checks `wasi_args[0]`. Accessing [0] on a string 'on' gives 'o'. That's WRONG if I expected an array. 
+                        // Let's fix wasi_args passing and wasi_isGroup.
+
+                        wasi_args: wasi_parts.slice(1), // Pass ARRAY for args access like args[0]
+                        wasi_isGroup,
                         wasi_msg,
                         wasi_text
                     });

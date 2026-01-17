@@ -9,6 +9,7 @@ module.exports = {
     ownerNumber: process.env.OWNER_NUMBER || '263788049675', // Your WhatsApp number without + or spaces
     prefix: '.',
     mode: process.env.MODE || 'public', // public / private put public if you want to use it in public group    
+    sessionId: process.env.SESSION_ID || 'wasi_session', // Unique ID to separate data in MongoDB
 
     // -----------------------powered by mrwasi.dev----------------------------------------------------
     // TIME & REGION
@@ -27,6 +28,10 @@ module.exports = {
     autoStatusSeen: true,         // Automatically view status updates and react with heart
     autoStatusReact: true,        // React with heart emoji on status
     autoStatusMessage: true,      // Send "Your status has been seen by WASI BOT" message
+    autoWelcome: false,           // Auto welcome new group members
+    autoGoodbye: false,           // Auto goodbye left group members
+    welcomeMessage: "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT",
+    goodbyeMessage: "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT",
 
     // ---------------------------------------------------------------------------
     // PRESENCE / APPEARANCE (true / false)

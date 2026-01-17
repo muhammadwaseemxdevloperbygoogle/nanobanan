@@ -324,10 +324,40 @@
 
                         <label
                             class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoReplyEnabled"
+                            <input type="checkbox" id="cfg-autoWelcome"
                                 class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Enable Auto Replies</span>
+                            <span class="text-gray-300">👋 Auto Welcome (Group)</span>
                         </label>
+
+                        <label
+                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
+                            <input type="checkbox" id="cfg-autoGoodbye"
+                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
+                            <span class="text-gray-300">👋 Auto Goodbye (Group)</span>
+                        </label>
+
+                        <input type="checkbox" id="cfg-autoReplyEnabled"
+                            class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
+                        <span class="text-gray-300">Enable Auto Replies</span>
+                        </label>
+                    </div>
+
+                    <!-- Welcome/Goodbye Custom Text -->
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white/5 p-4 rounded-xl">
+                            <label class="block text-gray-400 text-sm mb-2">👋 Welcome Message</label>
+                            <textarea id="cfg-welcomeMessage" rows="3"
+                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none"
+                                placeholder="Hello @user, Welcome to @group!"></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Use @user for mention, @group for group name</p>
+                        </div>
+                        <div class="bg-white/5 p-4 rounded-xl">
+                            <label class="block text-gray-400 text-sm mb-2">👋 Goodbye Message</label>
+                            <textarea id="cfg-goodbyeMessage" rows="3"
+                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none"
+                                placeholder="@user Left the group."></textarea>
+                            <p class="text-xs text-gray-500 mt-1">Use @user for mention, @group for group name</p>
+                        </div>
                     </div>
 
                     <!-- Auto Replies Section -->
@@ -585,7 +615,12 @@
                 document.getElementById('cfg-autoTyping').checked = !!data.autoTyping;
                 document.getElementById('cfg-autoRecording').checked = !!data.autoRecording;
                 document.getElementById('cfg-alwaysOnline').checked = !!data.alwaysOnline;
+                document.getElementById('cfg-autoWelcome').checked = !!data.autoWelcome;
+                document.getElementById('cfg-autoGoodbye').checked = !!data.autoGoodbye;
                 document.getElementById('cfg-autoReplyEnabled').checked = !!data.autoReplyEnabled;
+
+                document.getElementById('cfg-welcomeMessage').value = data.welcomeMessage || "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT";
+                document.getElementById('cfg-goodbyeMessage').value = data.goodbyeMessage || "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT";
 
                 // Populate Auto Replies
                 const container = document.getElementById('cfg-replies-container');
