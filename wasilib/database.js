@@ -38,6 +38,16 @@ const wasi_bgmConfigSchema = new mongoose.Schema({
     isEnabled: { type: Boolean, default: true }
 });
 
+const wasi_botConfigSchema = new mongoose.Schema({
+    prefix: { type: String, default: '.' },
+    menuImage: { type: String, default: '' },
+    autoRead: { type: Boolean, default: false },
+    autoRejectCall: { type: Boolean, default: false },
+    welcomeMessage: { type: String, default: '' },
+    goodbyeMessage: { type: String, default: '' },
+    ownerName: { type: String, default: 'Wasi' },
+});
+
 let isConnected = false;
 
 // ---------------------------------------------------------------------------
@@ -55,9 +65,43 @@ function getModel(sessionId, type) {
         case 'SessionIndex': return mongoose.model(name, wasi_sessionIndexSchema);
         case 'Bgm': return mongoose.model(name, wasi_bgmSchema);
         case 'BgmConfig': return mongoose.model(name, wasi_bgmConfigSchema);
+        case 'BotConfig': return mongoose.model(name, wasi_botConfigSchema);
         default: throw new Error(`Unknown model type: ${type}`);
     }
 }
+// ...(DB CONNECTION and other existing functions)...
+
+// ---------------------------------------------------------------------------
+// BOT CONFIG MANAGEMENT
+// ---------------------------------------------------------------------------
+async function wasi_getBotConfig(sessionId) {
+    if (!isConnected) return null;
+    try {
+        const Model = getModel(sessionId, 'BotConfig');
+        let config = await Model.findOne({});
+        if (!config) {
+            config = await Model.create({}); // Create defaults if missing
+        }
+        return config;
+    } catch (e) {
+        console.error('DB Error getBotConfig:', e);
+        return null;
+    }
+}
+
+async function wasi_updateBotConfig(sessionId, updates) {
+    if (!isConnected) return false;
+    try {
+        const Model = getModel(sessionId, 'BotConfig');
+        await Model.findOneAndUpdate({}, updates, { upsert: true, new: true });
+        return true;
+    } catch (e) {
+        console.error('DB Error updateBotConfig:', e);
+        return false;
+    }
+}
+
+
 
 // ---------------------------------------------------------------------------
 // DB CONNECTION
@@ -335,5 +379,7 @@ module.exports = {
     wasi_getBgm,
     wasi_getAllBgms,
     wasi_toggleBgm,
-    wasi_isBgmEnabled
+    wasi_isBgmEnabled,
+    wasi_getBotConfig,
+    wasi_updateBotConfig
 };

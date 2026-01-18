@@ -7,6 +7,7 @@ module.exports = {
     category: 'Media',
     desc: 'Convert image/video to sticker',
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
+        console.log('🎬 Sticker command triggered!');
         const { wasi_msg, wasi_args } = context;
 
         // Check for quoted message or direct media
@@ -23,10 +24,16 @@ module.exports = {
         try {
             await wasi_sock.sendMessage(wasi_sender, { text: '⏳ Creating sticker...' });
 
-            // Get the actual message to download from
-            const msgToDownload = quotedMsg ?
-                { message: quotedMsg, key: wasi_msg.message.extendedTextMessage.contextInfo } :
-                wasi_msg;
+            // Correctly structure the message for download
+            let msgToDownload = wasi_msg;
+            if (quotedMsg) {
+                // Creating a fake message object that mimics a direct media message
+                // This is required because downloadMediaMessage expects { message: ... }
+                msgToDownload = {
+                    message: quotedMsg,
+                    key: { ...wasi_msg.key, id: wasi_msg.message.extendedTextMessage.contextInfo.stanzaId, participant: wasi_msg.message.extendedTextMessage.contextInfo.participant }
+                };
+            }
 
             // Download media
             const buffer = await downloadMediaMessage(
@@ -34,13 +41,15 @@ module.exports = {
                 'buffer',
                 {},
                 {
+                    logger: console,
                     reuploadRequest: wasi_sock.updateMediaMessage
                 }
             );
 
-            // Parse sticker metadata from args
-            const pack = wasi_args?.split('|')[0]?.trim() || 'WASI BOT';
-            const author = wasi_args?.split('|')[1]?.trim() || '@Itxxwasi';
+            // Parse sticker metadata from args (wasi_args is an Array!)
+            const fullArgs = wasi_args.join(' ');
+            const pack = fullArgs.split('|')[0]?.trim() || 'WASI BOT';
+            const author = fullArgs.split('|')[1]?.trim() || '@Itxxwasi';
 
             // Convert to WebP using sharp for proper sticker format
             const webpBuffer = await sharp(buffer)

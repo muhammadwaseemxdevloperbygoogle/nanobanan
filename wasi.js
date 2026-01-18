@@ -7,7 +7,7 @@ module.exports = {
     botName: process.env.BOT_NAME || 'WASI BOT',
     ownerName: 'Waseem',
     ownerNumber: process.env.OWNER_NUMBER || '263788049675', // Your WhatsApp number without + or spaces
-    prefix: '.',
+    prefix: '/',
     mode: process.env.MODE || 'public', // public / private put public if you want to use it in public group    
     sessionId: process.env.SESSION_ID || 'wasi_session', // Unique ID to separate data in MongoDB
 

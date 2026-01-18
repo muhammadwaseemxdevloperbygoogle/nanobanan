@@ -1,9 +1,24 @@
 node_modules/
-session/
 .env
 *.log
 .DS_Store
 Thumbs.db
+
+# Sessions & Auth (Keep DB as source of truth)
+session/
 auth_info/
+auth_info_baileys/
+wasi_session*/
+
+# Dynamic Config (Use DB/Env for prod)
 botConfig.json
 replies.json
+groupSettings.json
+
+# Scripts (Local utilities)
+scripts/
+
+# Ops
+docker-compose.yml
+Dockerfile
+.dockerignore

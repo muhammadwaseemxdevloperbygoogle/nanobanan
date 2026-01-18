@@ -169,7 +169,7 @@ async function startSession(sessionId) {
         await handleGroupParticipantsUpdate(wasi_sock, update, config);
     });
 
-    setupMessageHandler(wasi_sock);
+    await setupMessageHandler(wasi_sock, sessionId);
 }
 
 // -----------------------------------------------------------------------------
@@ -227,15 +227,17 @@ wasi_app.post('/api/config', async (req, res) => {
             await wasi_saveAutoReplies(newConfig.autoReplies);
         }
 
-        // Restart ALL sessions to apply config? Or just specific ones?
-        // For simplicity, we restart all.
-        console.log('Config updated. Restarting all sessions...');
+        // HOT RELOAD CONFIG for all active sessions
+        console.log('Reloading config for active sessions...');
         for (const [id, session] of sessions) {
-            if (session.sock) session.sock.end(undefined);
-            setTimeout(() => startSession(id), 1000);
+            if (session.config) {
+                // Update the live config object
+                Object.assign(session.config, newConfig);
+                console.log(`Updated config for session ${id}`);
+            }
         }
 
-        res.json({ success: true, message: 'Configuration saved. Bots restarting...' });
+        res.json({ success: true, message: 'Configuration saved and applied instantly!' });
     } catch (e) {
         res.json({ success: false, error: e.message });
     }
@@ -309,7 +311,22 @@ async function startPairingSession(sessionId, phone) {
             let codeResolved = false;
 
             wasi_sock.ev.on('connection.update', async (update) => {
-                const { connection, lastDisconnect } = update;
+                const { connection, lastDisconnect, qr } = update;
+
+                if (qr && !codeResolved && !wasi_sock.authState.creds.registered) {
+                    codeResolved = true;
+                    try {
+                        // Wait a tiny bit for stability
+                        await new Promise(r => setTimeout(r, 2000));
+                        const code = await wasi_sock.requestPairingCode(phone);
+                        console.log(`Pairing code for ${sessionId}: ${code}`);
+                        resolve(code);
+                    } catch (e) {
+                        console.error('Failed to request code:', e);
+                        reject(e);
+                    }
+                }
+
                 if (connection === 'open') {
                     console.log(`Session ${sessionId} paired successfully!`);
                     sessionState.isConnected = true;
@@ -319,27 +336,21 @@ async function startPairingSession(sessionId, phone) {
                     const statusCode = (lastDisconnect?.error instanceof Boom) ?
                         lastDisconnect.error.output.statusCode : 500;
                     if (statusCode !== DisconnectReason.loggedOut) {
-                        // reconnect logic if needed, or rely on main starter
-                        // For pairing, if it closes before `open`, it might be failed.
-                        startSession(sessionId); // Transition to normal loop
+                        // If we haven't resolved code yet, we might want to retry pairing logic?
+                        // Or just let startSession handle reconnect.
+                        if (!codeResolved) {
+                            // Retrying pairing logic might be infinite loop if we don't be careful.
+                            // For now, let it fail so user can retry API call.
+                        } else {
+                            startSession(sessionId);
+                        }
                     }
                 }
             });
             wasi_sock.ev.on('creds.update', saveCreds);
 
-            // Wait a bit then request code
-            setTimeout(async () => {
-                try {
-                    if (!wasi_sock.authState.creds.registered) {
-                        const code = await wasi_sock.requestPairingCode(phone);
-                        resolve(code);
-                    } else {
-                        reject(new Error('Already registered'));
-                    }
-                } catch (e) {
-                    reject(e);
-                }
-            }, 3000);
+            // Removed fixed timeout
+
 
         } catch (e) {
             reject(e);
@@ -417,11 +428,37 @@ async function main() {
     }
 }
 
-// Separate message handler setup (Unchanged logic, just wrapper)
-function setupMessageHandler(wasi_sock, sessionId) {
+// Separate message handler setup
+async function setupMessageHandler(wasi_sock, sessionId) {
+    // FETCH DYNAMIC CONFIG ONCE (not on every message)
+    const { wasi_getBotConfig } = require('./wasilib/database');
+    let dbConfig = await wasi_getBotConfig(sessionId);
+    if (dbConfig && typeof dbConfig.toObject === 'function') dbConfig = dbConfig.toObject();
+
+    // Merge with defaults. DB config takes precedence if values exist.
+    // Merge with defaults. DB config takes precedence if values exist.
+    const initialConfig = { ...config, ...dbConfig };
+
+    // Ensure critical defaults if DB has partial data
+    if (!initialConfig.prefix) initialConfig.prefix = config.prefix || '.';
+
+    // Save config to session state for live updates
+    if (sessions.has(sessionId)) {
+        sessions.get(sessionId).config = initialConfig;
+    }
+
+    console.log(`📝 Loaded config for ${sessionId}: prefix="${initialConfig.prefix}"`);
+
     wasi_sock.ev.on('messages.upsert', async wasi_m => {
         const wasi_msg = wasi_m.messages[0];
         if (!wasi_msg.message) return;
+
+        // GET LIVE CONFIG
+        const currentConfig = sessions.get(sessionId)?.config || initialConfig;
+
+
+
+
 
         const messageTimestamp = wasi_msg.messageTimestamp;
         if (messageTimestamp) {
@@ -434,6 +471,12 @@ function setupMessageHandler(wasi_sock, sessionId) {
         const wasi_text = wasi_msg.message.conversation ||
             wasi_msg.message.extendedTextMessage?.text ||
             wasi_msg.message.imageMessage?.caption || "";
+
+        // AUTO READ
+        if (currentConfig.autoRead) {
+            await wasi_sock.readMessages([wasi_msg.key]);
+        }
+
 
         // ... (Paste original message handling logic here, or import it)
         // For brevity in this tool call, I will inline the essential parts.
@@ -493,25 +536,27 @@ function setupMessageHandler(wasi_sock, sessionId) {
         }
 
         // COMMANDS
-        if (wasi_text.trim().startsWith(config.prefix)) {
-            const wasi_parts = wasi_text.trim().slice(config.prefix.length).trim().split(/\s+/);
+        console.log(`Debug: Prefix is '${currentConfig.prefix}'`);
+        if (wasi_text.trim().startsWith(currentConfig.prefix)) {
+            const wasi_parts = wasi_text.trim().slice(currentConfig.prefix.length).trim().split(/\s+/);
             const wasi_cmd_input = wasi_parts[0].toLowerCase();
             const wasi_args = wasi_parts.slice(1);
 
             let plugin;
             if (wasi_plugins.has(wasi_cmd_input)) {
                 plugin = wasi_plugins.get(wasi_cmd_input);
-            } else if (wasi_aliases.has(wasi_cmd_input)) {
-                plugin = wasi_plugins.get(wasi_aliases.get(wasi_cmd_input));
             }
+
+
+
 
             if (plugin) {
                 try {
-                    // Pass sessionId to plugin context
+                    // Pass sessionId AND updated config to plugin context
                     await plugin.wasi_handler(
                         wasi_sock,
                         wasi_sender,
-                        { wasi_msg, wasi_args, wasi_plugins, sessionId }
+                        { wasi_msg, wasi_args, wasi_plugins, sessionId, config: currentConfig, wasi_text }
                     );
                 } catch (err) {
                     console.error(`Error in plugin ${plugin.name}:`, err);
