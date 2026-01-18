@@ -7,6 +7,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { wasi_connectSession, wasi_clearSession } = require('./wasilib/session');
+const { applyFont } = require('./wasilib/fonts');
 const {
     wasi_connectDatabase,
     wasi_isCommandEnabled,
@@ -16,6 +17,8 @@ const {
     wasi_saveAutoReplies,
     wasi_getAutoReplies
 } = require('./wasilib/database');
+// ... imports ...
+
 const config = require('./wasi');
 
 // Load persistent config
@@ -100,6 +103,22 @@ async function startSession(sessionId) {
 
     // Connect to session (this creates the socket)
     const { wasi_sock, saveCreds } = await wasi_connectSession(false, sessionId);
+
+    // Intercept sendMessage to apply global font style
+    const originalSendMessage = wasi_sock.sendMessage;
+    wasi_sock.sendMessage = async (jid, content, options) => {
+        const style = config.fontStyle || 'original';
+        if (style !== 'original') {
+            if (content.text) {
+                content.text = applyFont(content.text, style);
+            }
+            if (content.caption) {
+                content.caption = applyFont(content.caption, style);
+            }
+        }
+        return await originalSendMessage.call(wasi_sock, jid, content, options);
+    };
+
     sessionState.sock = wasi_sock;
 
     wasi_sock.ev.on('connection.update', async (update) => {

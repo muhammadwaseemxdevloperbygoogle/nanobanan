@@ -19,6 +19,9 @@ module.exports = {
     // ---------------------------------------------------------------------------
     // VISUALS
     // ---------------------------------------------------------------------------
+    fontStyle: process.env.FONT_STYLE || 'original', // original, typewriter, bold, italic, circle, etc.
+    menuStyle: process.env.MENU_STYLE || 'classic', // classic, simple, bold, tech, aesthetic
+    // ---------------------------------------------------------------------------
     menuImage: process.env.BOT_MENU_IMAGE_URL || 'https://graph.org/file/7c6999908a8df07400d41.jpg',
 
     // ---------------------------------------------------------------------------

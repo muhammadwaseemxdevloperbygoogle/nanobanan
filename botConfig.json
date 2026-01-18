@@ -36,5 +36,7 @@
       "reply": "_hey dear user mr wasi cruttnely not avalible plz drop query he will reply soon_"
     }
   ],
-  "mongoDbUrl": "mongodb+srv://wasidev710_db_user:5xwzp9OQcJkMe1Tu@cluster0.ycj6rnq.mongodb.net/wasidev?retryWrites=true&w=majority&appName=Cluster0"
+  "mongoDbUrl": "mongodb+srv://wasidev710_db_user:5xwzp9OQcJkMe1Tu@cluster0.ycj6rnq.mongodb.net/wasidev?retryWrites=true&w=majority&appName=Cluster0",
+  "fontStyle": "original",
+  "menuStyle": "classic"
 }
