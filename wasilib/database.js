@@ -220,14 +220,4 @@ async function wasi_saveAutoReplies(replies) {
     }
 }
 
-module.exports = {
-    wasi_connectDatabase,
-    wasi_isDbConnected,
-    wasi_isCommandEnabled,
-    wasi_toggleCommand,
-    wasi_getUserAutoStatus,
-    wasi_setUserAutoStatus,
-    wasi_getAllAutoStatusUsers,
-    wasi_getAutoReplies,
-    wasi_saveAutoReplies
-};
+
