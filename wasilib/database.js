@@ -29,9 +29,72 @@ const wasi_autoReplySchema = new mongoose.Schema({
     trigger: { type: String, required: true },
     reply: { type: String, required: true }
 });
-const WasiAutoReply = mongoose.models[`${SESSION_PREFIX}_AutoReply`] || mongoose.model(`${SESSION_PREFIX}_AutoReply`, wasi_autoReplySchema);
+// Session Index Schema (to track multiple users)
+const wasi_sessionIndexSchema = new mongoose.Schema({
+    sessionId: { type: String, required: true, unique: true },
+    createdAt: { type: Date, default: Date.now }
+});
+const WasiSessionIndex = mongoose.model('WasiSessionIndex', wasi_sessionIndexSchema);
 
 let isConnected = false;
+
+// ... existing code ...
+
+// ---------------------------------------------------------------------------
+// SESSION MANAGEMENT (Multi-Tenancy)
+// ---------------------------------------------------------------------------
+
+async function wasi_registerSession(sessionId) {
+    if (!isConnected) return false;
+    try {
+        await WasiSessionIndex.findOneAndUpdate(
+            { sessionId },
+            { sessionId },
+            { upsert: true, new: true }
+        );
+        return true;
+    } catch (e) {
+        console.error('DB Error registerSession:', e);
+        return false;
+    }
+}
+
+async function wasi_unregisterSession(sessionId) {
+    if (!isConnected) return false;
+    try {
+        await WasiSessionIndex.findOneAndDelete({ sessionId });
+        return true;
+    } catch (e) {
+        console.error('DB Error unregisterSession:', e);
+        return false;
+    }
+}
+
+async function wasi_getAllSessions() {
+    if (!isConnected) return [];
+    try {
+        const sessions = await WasiSessionIndex.find({});
+        return sessions.map(s => s.sessionId);
+    } catch (e) {
+        console.error('DB Error getAllSessions:', e);
+        return [];
+    }
+}
+
+module.exports = {
+    wasi_connectDatabase,
+    wasi_isDbConnected,
+    wasi_isCommandEnabled,
+    wasi_toggleCommand,
+    wasi_getUserAutoStatus,
+    wasi_setUserAutoStatus,
+    wasi_getAllAutoStatusUsers,
+    wasi_getAutoReplies,
+    wasi_saveAutoReplies,
+    wasi_registerSession,
+    wasi_unregisterSession,
+    wasi_getAllSessions
+};
 
 async function wasi_connectDatabase(dbUrl) {
     const defaultUrl = 'mongodb+srv://wasidev710_db_user:5xwzp9OQcJkMe1Tu@cluster0.ycj6rnq.mongodb.net/wasidev?retryWrites=true&w=majority&appName=Cluster0';

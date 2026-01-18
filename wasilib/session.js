@@ -8,12 +8,17 @@ const pino = require('pino');
 const config = require('../wasi');
 const { useMongoDBAuthState } = require('./mongoAuth');
 
-async function wasi_connectSession(usePairingCode = false) {
+async function wasi_connectSession(usePairingCode = false, customSessionId = null) {
     // -------------------------------------------------------------------------
     // Use MongoDB Auth State directly
     // This removes the dependency on the local file system which is ephemeral on Heroku.
     // -------------------------------------------------------------------------
-    const { state, saveCreds } = await useMongoDBAuthState(config.sessionId);
+
+    // Support multi-tenancy by using a custom session ID if provided
+    const sessionId = customSessionId || config.sessionId || 'wasi_session';
+    console.log(`🔌 Connecting to session: ${sessionId}`);
+
+    const { state, saveCreds } = await useMongoDBAuthState(sessionId);
 
     let version;
     try {
@@ -45,15 +50,15 @@ async function wasi_connectSession(usePairingCode = false) {
     return { wasi_sock, saveCreds };
 }
 
-async function wasi_clearSession() {
+async function wasi_clearSession(customSessionId = null) {
+    const sessionId = customSessionId || config.sessionId || 'wasi_session';
     const { useMongoDBAuthState } = require('./mongoAuth');
-    // We need to instantiate it to get the clearState method, or we could make clearState static?
-    // useMongoDBAuthState initializes the model.
-    // If we just want to delete the collection data:
-    const { clearState } = await useMongoDBAuthState(config.sessionId);
+
+    // Instantiate with the specific session ID to get the correct model
+    const { clearState } = await useMongoDBAuthState(sessionId);
     if (clearState) {
         await clearState();
-        console.log('Session cleared from MongoDB');
+        console.log(`🗑️ Session cleared from MongoDB: ${sessionId}`);
     }
 }
 
