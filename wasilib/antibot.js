@@ -22,7 +22,7 @@ let settings = loadGroupSettings();
 
 // Core Logic
 async function handleAntiBot(sock, msg, isGroup, sender, groupMetadata) {
-    if (!isGroup) return;
+    if (!isGroup || !sender) return;
 
     const chatId = msg.key.remoteJid;
 

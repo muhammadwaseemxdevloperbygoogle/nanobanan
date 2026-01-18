@@ -21,8 +21,14 @@ module.exports = {
             // Wait, I can't easily edit the running Mongoose schema without restarting the app properly. 
             // I will edit `database.js` to add `autoViewOnce` to the schema first.
 
-            const status = wasi_args.toLowerCase() === 'on';
-            if (wasi_args.toLowerCase() !== 'on' && wasi_args.toLowerCase() !== 'off') {
+            if (!wasi_args || wasi_args.length === 0) {
+                return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Usage: .autovv on/off' });
+            }
+
+            const input = wasi_args[0].toLowerCase();
+            const status = input === 'on';
+
+            if (input !== 'on' && input !== 'off') {
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Usage: .autovv on/off' });
             }
 

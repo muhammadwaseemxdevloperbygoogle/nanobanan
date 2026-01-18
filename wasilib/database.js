@@ -29,6 +29,8 @@ const wasi_autoReplySchema = new mongoose.Schema({
     trigger: { type: String, required: true },
     reply: { type: String, required: true }
 });
+const WasiAutoReply = mongoose.models[`${SESSION_PREFIX}_AutoReply`] || mongoose.model(`${SESSION_PREFIX}_AutoReply`, wasi_autoReplySchema);
+
 // Session Index Schema (to track multiple users)
 const wasi_sessionIndexSchema = new mongoose.Schema({
     sessionId: { type: String, required: true, unique: true },
@@ -37,8 +39,6 @@ const wasi_sessionIndexSchema = new mongoose.Schema({
 const WasiSessionIndex = mongoose.model('WasiSessionIndex', wasi_sessionIndexSchema);
 
 let isConnected = false;
-
-// ... existing code ...
 
 // ---------------------------------------------------------------------------
 // SESSION MANAGEMENT (Multi-Tenancy)
