@@ -33,10 +33,19 @@ module.exports = {
 
             const success = await wasi_updateBotConfig(sessionId, { menuImage: url });
             if (success) {
-                return await wasi_sock.sendMessage(wasi_sender, {
-                    image: { url: url },
-                    caption: '✅ Menu Image Updated Successfully!'
-                });
+                try {
+                    const axios = require('axios');
+                    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
+                    const buffer = Buffer.from(response.data);
+
+                    return await wasi_sock.sendMessage(wasi_sender, {
+                        image: buffer,
+                        caption: '✅ Menu Image Updated Successfully!'
+                    });
+                } catch (e) {
+                    console.error('Settings Image Fetch Failed:', e.message);
+                    return await wasi_sock.sendMessage(wasi_sender, { text: '✅ Menu Image Updated (Preview failed).' });
+                }
             } else {
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Database Error.' });
             }

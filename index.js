@@ -679,24 +679,24 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
                         if (!isAdmin) {
                             // 3. BOT ADMIN CHECK (Super Robust)
-                            const rawBotId = wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id;
-                            const botId = jidNormalizedUser(rawBotId);
-                            const botNum = botId.split('@')[0].split(':')[0];
-                            const ownerNum = currentConfig.ownerNumber;
+                            const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
+                            const botJids = new Set([
+                                jidNormalizedUser(me?.id),
+                                jidNormalizedUser(me?.jid),
+                                jidNormalizedUser(me?.lid),
+                                jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')
+                            ].filter(Boolean));
 
-                            // Match by JID, Number, or Owner Fallback (Crucial for LID accounts)
+                            const botNumbers = new Set();
+                            botJids.forEach(j => botNumbers.add(j.split('@')[0].split(':')[0]));
+
                             const botMod = participants.find(p => {
                                 const pJid = jidNormalizedUser(p.id);
                                 const pNum = pJid.split('@')[0].split(':')[0];
-                                return (pJid === botId) || (pNum === botNum) || (pNum === ownerNum);
+                                return botJids.has(pJid) || botNumbers.has(pNum);
                             });
 
                             const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
-
-                            if (!isBotAdmin) {
-                                console.log(`🕵️ BotAdmin Miss: BotId=${botId} | OwnerNum=${ownerNum} | Found=${!!botMod} | Role=${botMod?.admin}`);
-                            }
-
                             console.log(`🔗 Link detected in ${wasi_origin} (BotAdmin: ${isBotAdmin})`);
 
                             // Delete message
@@ -968,43 +968,60 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                             const senderMod = participants.find(p => p.id === wasi_msg.key.participant || p.id === wasi_sender);
                             wasi_isAdmin = (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
 
-                            // Check Bot Admin Status (Robust)
+                            // Check Bot Admin Status (Super Robust)
                             const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+                            const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
+                            const botJids = new Set([
+                                jidNormalizedUser(me?.id),
+                                jidNormalizedUser(me?.jid),
+                                jidNormalizedUser(me?.lid),
+                                jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')
+                            ].filter(Boolean));
 
-                            // Get Bot's JID
-                            const rawBotId = wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id;
-                            const botId = jidNormalizedUser(rawBotId);
-                            const botNum = botId.split('@')[0].split(':')[0]; // Just the number
+                            const botNumbers = new Set();
+                            botJids.forEach(j => botNumbers.add(j.split('@')[0].split(':')[0]));
 
-                            // Find bot in participants
-                            console.log(`🔎 Participants Count: ${participants.length}`);
                             const botMod = participants.find(p => {
-                                const pNum = jidNormalizedUser(p.id).split('@')[0].split(':')[0];
-                                const isMatch = (pNum === botNum);
-                                // console.log(`checking: ${pNum} vs ${botNum} = ${isMatch}`);
-                                return isMatch;
+                                const pJid = jidNormalizedUser(p.id);
+                                const pNum = pJid.split('@')[0].split(':')[0];
+                                return botJids.has(pJid) || botNumbers.has(pNum);
                             });
 
                             wasi_botIsAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
-
-                            console.log(`🤖 Bot Admin Check: Target=${botNum} | Found=${!!botMod} | Role=${botMod?.admin}`);
+                            console.log(`🤖 Bot Admin Check: IDs=[${Array.from(botJids).join(', ')}] | Found=${!!botMod} | Role=${botMod?.admin}`);
                         } catch (gErr) {
                             console.error('Error fetching group metadata:', gErr);
                         }
                     }
 
-                    // IS OWNER & SUDO CHECK (Supports Sudo & LIDs)
-                    const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
-                    const botNum = botJid.split('@')[0].split(':')[0];
-                    const senderNum = wasi_sender.split('@')[0].split(':')[0];
+                    // IDENTIFICATION (Owner, Sudo, Bot)
+                    const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
+                    const botJids = new Set([
+                        jidNormalizedUser(me?.id),
+                        jidNormalizedUser(me?.jid),
+                        jidNormalizedUser(me?.lid),
+                        jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')
+                    ].filter(Boolean));
+
+                    const botNumbers = new Set();
+                    botJids.forEach(j => botNumbers.add(j.split('@')[0].split(':')[0]));
+
+                    const senderNum = wasi_sender.split('@')[0].split(':')[0].replace(/\D/g, '');
                     const senderJid = wasi_sender;
 
-                    const ownerNumber = currentConfig.ownerNumber;
-                    const sudoListRaw = currentConfig.sudo || [];
-                    const sudoList = sudoListRaw.map(s => s.replace(/[^0-9]/g, ''));
+                    const ownerNumRaw = (currentConfig.ownerNumber || process.env.OWNER_NUMBER || '').toString();
+                    const ownerNumber = ownerNumRaw.replace(/\D/g, '');
 
-                    const wasi_isOwner = (senderJid === botJid) || (senderNum === botNum) || (senderNum === ownerNumber);
+                    const sudoListRaw = currentConfig.sudo || [];
+                    const sudoList = sudoListRaw.map(s => s.toString().replace(/\D/g, ''));
+
+                    // THE MASTER CHECK
+                    const wasi_isOwner = botJids.has(senderJid) || botNumbers.has(senderNum) || (senderNum === ownerNumber) || (senderJid.startsWith(ownerNumber));
                     const wasi_isSudo = wasi_isOwner || sudoList.includes(senderNum);
+
+                    if (plugin.ownerOnly && !wasi_isOwner && !wasi_isSudo) {
+                        console.log(`🚫 Security: ${senderJid} (${senderNum}) tried ${plugin.name} | Owner: ${ownerNumber}`);
+                    }
 
                     // Pass all context to plugin, including owner and sudo flags
                     await plugin.wasi_handler(

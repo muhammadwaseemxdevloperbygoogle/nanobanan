@@ -10,20 +10,7 @@ module.exports = {
         const config = require('../wasi');
 
         if (!wasi_isOwner && !wasi_isSudo) {
-            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-            const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
-            const botNum = botJid.split('@')[0].split(':')[0];
-            const senderNum = wasi_sender.split('@')[0].split(':')[0];
-
-            const isKwOwner = (wasi_sender === botJid) || (senderNum === botNum) || (senderNum === config.ownerNumber) || (senderNum === process.env.OWNER_NUMBER);
-            const sudoList = config.sudo || [];
-
-            if (!isKwOwner) {
-                const isKwSudo = sudoList.some(s => s.replace(/[^0-9]/g, '') === senderNum);
-                if (!isKwSudo) {
-                    return await wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only the Owner or Sudo users can use this command.' }, { quoted: wasi_msg });
-                }
-            }
+            return await wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only the Owner or Sudo users can use this command.' }, { quoted: wasi_msg });
         }
 
         // Case 1: Toggle On/Off

@@ -36,20 +36,30 @@ module.exports = {
             captionPrefix += `\n> WASI-MD-V7`;
 
             // Send all media found (some posts have multiple images/videos)
+            const axios = require('axios');
             for (let i = 0; i < data.media.length; i++) {
                 const item = data.media[i];
                 const msgCaption = i === 0 ? captionPrefix : ''; // Only first item gets the caption
 
-                if (item.type === 'video') {
-                    await wasi_sock.sendMessage(wasi_sender, {
-                        video: { url: item.url },
-                        caption: msgCaption
-                    });
-                } else {
-                    await wasi_sock.sendMessage(wasi_sender, {
-                        image: { url: item.url },
-                        caption: msgCaption
-                    });
+                try {
+                    const response = await axios.get(item.url, { responseType: 'arraybuffer', timeout: 30000 });
+                    const buffer = Buffer.from(response.data);
+
+                    if (item.type === 'video') {
+                        await wasi_sock.sendMessage(wasi_sender, {
+                            video: buffer,
+                            caption: msgCaption
+                        });
+                    } else {
+                        await wasi_sock.sendMessage(wasi_sender, {
+                            image: buffer,
+                            caption: msgCaption
+                        });
+                    }
+                } catch (ferr) {
+                    console.error(`Media Fetch Failed (${item.url}):`, ferr.message);
+                    // Single fallback text if one item fails
+                    await wasi_sock.sendMessage(wasi_sender, { text: `❌ Failed to fetch media item ${i + 1}.` });
                 }
             }
 
