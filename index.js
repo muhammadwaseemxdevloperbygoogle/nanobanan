@@ -430,6 +430,22 @@ async function startPairingSession(sessionId, phone) {
             });
             wasi_sock.ev.on('creds.update', saveCreds);
 
+            // Fallback: If QR event doesn't fire within 6 seconds, try checking eligibility and requesting
+            setTimeout(async () => {
+                if (!codeResolved && !wasi_sock.authState.creds.registered) {
+                    console.log(`Fallback: Requesting code for ${sessionId} without explicit QR event...`);
+                    codeResolved = true;
+                    try {
+                        const code = await wasi_sock.requestPairingCode(phone);
+                        console.log(`Pairing code for ${sessionId}: ${code}`);
+                        resolve(code);
+                    } catch (e) {
+                        console.error('Fallback failed to request code:', e);
+                        reject(e);
+                    }
+                }
+            }, 6000);
+
             // Removed fixed timeout
 
 

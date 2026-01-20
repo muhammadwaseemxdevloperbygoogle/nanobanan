@@ -5,6 +5,10 @@ const { BufferJSON, initAuthCreds } = require('@whiskeysockets/baileys');
 const AuthStateSchema = new mongoose.Schema({
     _id: String,
     data: mongoose.Schema.Types.Mixed // Use Mixed to allow storing Stringified JSON
+}, {
+    _id: false, // We manually set _id
+    bufferCommands: true, // Keep buffering but...
+    autoCreate: true // Ensure collection is created
 });
 
 const useMongoDBAuthState = async (sessionId = 'wasi_session') => {
@@ -17,6 +21,7 @@ const useMongoDBAuthState = async (sessionId = 'wasi_session') => {
     try {
         AuthState = mongoose.model(ModelName);
     } catch {
+        // Increase timeout for slow connections
         AuthState = mongoose.model(ModelName, AuthStateSchema, dbCollectionName);
     }
 
