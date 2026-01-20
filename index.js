@@ -263,11 +263,25 @@ wasi_app.get('/api/config', async (req, res) => {
 wasi_app.post('/api/config', async (req, res) => {
     try {
         const newConfig = req.body;
+        const oldUrl = config.mongoDbUrl;
         Object.assign(config, newConfig);
 
         try {
             fs.writeFileSync(path.join(__dirname, 'botConfig.json'), JSON.stringify(config, null, 2));
         } catch (err) { }
+
+        // If a new MongoDB URL is provided and we aren't connected yet, try to connect now
+        if (config.mongoDbUrl && (!isDbConnected || oldUrl !== config.mongoDbUrl)) {
+            console.log('🔗 New MongoDB URL provided. Attempting to connect...');
+            const dbResult = await wasi_connectDatabase(config.mongoDbUrl);
+            if (dbResult) {
+                isDbConnected = true;
+                console.log('✅ Database connected successfully! Initializing sessions...');
+                await restoreAllSessions();
+            } else {
+                return res.json({ success: false, error: 'Failed to connect to the provided MongoDB URL. Please check if it is valid.' });
+            }
+        }
 
         if (isDbConnected && newConfig.autoReplies) {
             await wasi_saveAutoReplies(newConfig.autoReplies);
@@ -436,23 +450,9 @@ function wasi_startServer() {
 // MAIN STARTUP
 // -----------------------------------------------------------------------------
 
-async function main() {
-    // 1. Connect DB
-    const dbResult = await wasi_connectDatabase(config.mongoDbUrl);
-    if (!dbResult) {
-        console.error('❌ Database connection failed. Exiting.');
-        return;
-    }
-    isDbConnected = true;
+async function restoreAllSessions() {
+    if (!isDbConnected) return;
 
-    // 2. Load Plugins
-    wasi_loadPlugins();
-
-    // 3. Start Server
-    wasi_startServer();
-
-    // 4. Restore Sessions
-    // We pass null or current config session ID to get visible sessions
     const currentSessionId = config.sessionId || 'wasi_session';
     const savedSessions = await wasi_getAllSessions(currentSessionId);
     console.log(`🔄 Restoring ${savedSessions.length} sessions from DB...`);
@@ -463,14 +463,41 @@ async function main() {
         await startSession(currentSessionId);
     } else {
         for (const id of savedSessions) {
-            startSession(id);
+            if (!sessions.has(id)) {
+                startSession(id);
+            }
         }
-        // If default session not in list (e.g. new clone), should we start it?
-        // Best to only start what's in DB to respect "unregister" logic.
-        // But for safety on first migration:
-        if (!savedSessions.includes(currentSessionId)) {
+        if (!savedSessions.includes(currentSessionId) && !sessions.has(currentSessionId)) {
             startSession(currentSessionId);
         }
+    }
+}
+
+async function main() {
+    // 1. Connect DB (Optional at startup)
+    if (config.mongoDbUrl) {
+        const dbResult = await wasi_connectDatabase(config.mongoDbUrl);
+        if (dbResult) {
+            isDbConnected = true;
+            console.log('✅ Database connected at startup');
+        } else {
+            console.error('⚠️ Database connection failed at startup. Use dashboard to fix.');
+        }
+    } else {
+        console.log('ℹ️ No MongoDB URL found. Use dashboard to configure.');
+    }
+
+    // 2. Load Plugins
+    wasi_loadPlugins();
+
+    // 3. Start Server (Always start so dashboard is accessible)
+    wasi_startServer();
+
+    // 4. Restore Sessions (Only if DB is connected)
+    if (isDbConnected) {
+        await restoreAllSessions();
+    } else {
+        console.log('⏳ Waiting for Database URL to start sessions...');
     }
 }
 

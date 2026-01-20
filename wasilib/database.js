@@ -113,8 +113,7 @@ async function wasi_updateBotConfig(sessionId, updates) {
 // DB CONNECTION
 // ---------------------------------------------------------------------------
 async function wasi_connectDatabase(dbUrl) {
-    const defaultUrl = 'mongodb+srv://wasidev710_db_user:5xwzp9OQcJkMe1Tu@cluster0.ycj6rnq.mongodb.net/wasidev?retryWrites=true&w=majority&appName=Cluster0';
-    const uri = dbUrl || process.env.MONGODB_URI || defaultUrl;
+    const uri = dbUrl || process.env.MONGODB_URI;
 
     if (!uri) {
         console.error('❌ FATAL ERROR: No MONGODB_URI found.');

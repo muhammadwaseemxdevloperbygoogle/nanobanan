@@ -20,7 +20,7 @@ module.exports = {
         const isCurrentlyEnabled = currentSettings?.autoStatusSeen || false;
 
         // Parse arguments
-        const arg = wasi_args?.toLowerCase()?.trim();
+        const arg = typeof wasi_args === 'string' ? wasi_args.toLowerCase().trim() : (Array.isArray(wasi_args) && wasi_args[0] ? String(wasi_args[0]).toLowerCase().trim() : '');
 
         if (arg === 'on' || arg === 'enable') {
             await wasi_setUserAutoStatus(wasi_sender, {

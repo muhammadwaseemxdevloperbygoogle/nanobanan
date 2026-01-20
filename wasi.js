@@ -5,9 +5,9 @@ module.exports = {
     // BASIC SETTINGS (Edit these)
     // ---------------------------------------------------------------------------
     botName: process.env.BOT_NAME || 'WASI BOT',
-    ownerName: 'Waseem',
-    ownerNumber: process.env.OWNER_NUMBER || '263788049675', // Your WhatsApp number without + or spaces
-    prefix: '/',
+    ownerName: 'MR WASI DEV',
+    ownerNumber: process.env.OWNER_NUMBER || '923259823531', // Your WhatsApp number without + or spaces
+    prefix: '.',
     mode: process.env.MODE || 'public', // public / private put public if you want to use it in public group    
     sessionId: process.env.SESSION_ID || 'wasi_session', // Unique ID to separate data in MongoDB
 
@@ -56,7 +56,7 @@ module.exports = {
     // ---------------------------------------------------------------------------
     // DATABASE
     // ---------------------------------------------------------------------------
-    mongoDbUrl: process.env.MONGODB_URI || '',
+    mongoDbUrl: '',
 
     // ---------------------------------------------------------------------------
     // NEWSLETTER / CHANNEL
