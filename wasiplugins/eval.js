@@ -6,14 +6,10 @@ module.exports = {
     category: 'Admin',
     desc: 'Evaluate JavaScript code',
     ownerOnly: true,
-    wasi_handler: async (wasi_sock, wasi_sender, { wasi_msg, wasi_args, wasi_text }) => {
+    wasi_handler: async (wasi_sock, wasi_chatId, { wasi_msg, wasi_args, wasi_text }) => {
         try {
-            // "eval" is dangerous, so restrict to owner (handled by ownerOnly: true check in index.js)
-            // We expose commonly used variables to the eval scope
-            // wasi_sock, wasi_sender, wasi_msg, wasi_args are available in scope
-
-            let code = wasi_args;
-            if (!code) return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Please provide code to evaluate.' });
+            let code = wasi_args.join(' ');
+            if (!code) return await wasi_sock.sendMessage(wasi_chatId, { text: '❌ Please provide code to evaluate.' });
 
             let evaled = await eval(code);
 

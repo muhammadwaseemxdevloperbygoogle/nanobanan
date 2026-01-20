@@ -8,7 +8,8 @@ const AuthStateSchema = new mongoose.Schema({
 }, {
     _id: false, // We manually set _id
     bufferCommands: true, // Keep buffering but...
-    autoCreate: true // Ensure collection is created
+    autoCreate: true, // Ensure collection is created
+    bufferTimeoutMS: 5000 // Error out after 5s if still buffering (default is 10s)
 });
 
 const useMongoDBAuthState = async (sessionId = 'wasi_session') => {

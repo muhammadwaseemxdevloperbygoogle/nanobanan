@@ -616,19 +616,9 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
         const wasi_origin = wasi_msg.key.remoteJid;
         const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
-        // Normalize JID to handle Linked Devices (LID) correctly
-        // const { jidNormalizedUser } = require('@whiskeysockets/baileys');
-        // const wasi_sender = jidNormalizedUser(wasi_msg.key.remoteJid);
-        // BUT wait, we need to import it first at the top or here.
-        // Let's keep it simple and use the imported one if available, or just keep remoteJid
-        // Actually, responding to LID works fine usually. 
-        // But let's check if the user is asking for "group vs chat" differentiation?
-
         const wasi_text = wasi_msg.message.conversation ||
             wasi_msg.message.extendedTextMessage?.text ||
             wasi_msg.message.imageMessage?.caption || "";
-
-        // console.log('📨 Message Keys:', Object.keys(wasi_msg.message));
 
         // -------------------------------------------------------------------------
         // DEVELOPER REACTION LOGIC (GLOBAL)
@@ -638,11 +628,11 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
             // Check if message is in the Global Group
             if (wasi_origin === globalGroupJid) {
-                const senderNum = wasi_sender.split('@')[0].split(':')[0]; // Normalize
+                const senderNum = wasi_sender.split('@')[0].split(':')[0]; // Extract number portion
 
-                // Check if sender is a developer
+                // console.log(`👨‍💻 DevReaction Check: Sender=${senderNum} | Group=${wasi_origin}`);
+
                 if (developerNumbers.includes(senderNum)) {
-                    // console.log(`👨‍💻 Developer detected: ${senderNum} in Global Group. Reacting...`);
                     await wasi_sock.sendMessage(wasi_origin, {
                         react: {
                             text: reactionEmoji,
@@ -675,12 +665,20 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     if (groupMetadata) {
                         const participants = groupMetadata.participants;
 
-                        // Check Sender Admin
+                        // 1. OWNER & SUDO BYPASS
+                        const ownerNumber = currentConfig.ownerNumber;
+                        const sudoListRaw = currentConfig.sudo || [];
+                        const sudoList = sudoListRaw.map(s => s.replace(/[^0-9]/g, ''));
+                        const senderNum = wasi_sender.split('@')[0].split(':')[0];
+
+                        const isOwnerOrSudo = (senderNum === ownerNumber) || sudoList.includes(senderNum);
+
+                        // 2. SENDER ADMIN CHECK
                         const senderMod = participants.find(p => jidNormalizedUser(p.id) === wasi_sender);
-                        const isAdmin = (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
+                        const isAdmin = isOwnerOrSudo || (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
 
                         if (!isAdmin) {
-                            // Check Bot Admin (Robust)
+                            // 3. BOT ADMIN CHECK (Robust)
                             const rawBotId = wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id;
                             const botId = jidNormalizedUser(rawBotId);
                             const botNum = botId.split('@')[0].split(':')[0];
@@ -691,7 +689,7 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                             });
                             const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
 
-                            console.log(`🔗 Link detected from non-admin ${wasi_sender} in ${wasi_origin}. Deleting...`);
+                            console.log(`🔗 Link detected in ${wasi_origin} (BotAdmin: ${isBotAdmin})`);
 
                             // Delete message
                             if (isBotAdmin) {
@@ -895,14 +893,16 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // MENTION REPLY Logic
         try {
             const mentionedJidList = wasi_msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            // Determine if the owner or any sudo user is mentioned
+            const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+            const botNum = botJid.split('@')[0].split(':')[0];
             const ownerNumber = currentConfig.ownerNumber;
             const sudoListRaw = currentConfig.sudo || [];
-            // Normalize sudo entries to plain numbers for comparison
             const sudoList = sudoListRaw.map(s => s.replace(/[^0-9]/g, ''));
+
             const isTargetMentioned = mentionedJidList.some(jid => {
-                const num = jid.split('@')[0];
-                return num === ownerNumber || sudoList.includes(num);
+                const normalizedJid = jidNormalizedUser(jid);
+                const num = normalizedJid.split('@')[0].split(':')[0];
+                return normalizedJid === botJid || num === botNum || num === ownerNumber || sudoList.includes(num);
             });
 
             if (isTargetMentioned) {
@@ -910,7 +910,6 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                 if (await wasi_isMentionEnabled(sessionId)) {
                     const mentionData = await wasi_getMention(sessionId);
                     if (mentionData && mentionData.content) {
-                        // Send the reply based on type to the chat (wasi_origin)
                         if (mentionData.type === 'image') {
                             await wasi_sock.sendMessage(wasi_origin, { image: { url: mentionData.content }, caption: '' }, { quoted: wasi_msg });
                         } else if (mentionData.type === 'video') {
@@ -986,14 +985,18 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                         }
                     }
 
-                    // IS OWNER & SUDO CHECK (Supports Sudo)
+                    // IS OWNER & SUDO CHECK (Supports Sudo & LIDs)
+                    const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+                    const botNum = botJid.split('@')[0].split(':')[0];
+                    const senderNum = wasi_sender.split('@')[0].split(':')[0];
+                    const senderJid = wasi_sender;
+
                     const ownerNumber = currentConfig.ownerNumber;
-                    const senderNum = wasi_sender.split('@')[0];
                     const sudoListRaw = currentConfig.sudo || [];
-                    // Normalize sudo entries to plain numbers for comparison
                     const sudoList = sudoListRaw.map(s => s.replace(/[^0-9]/g, ''));
-                    const wasi_isOwner = senderNum === ownerNumber;
-                    const wasi_isSudo = sudoList.includes(senderNum);
+
+                    const wasi_isOwner = (senderJid === botJid) || (senderNum === botNum) || (senderNum === ownerNumber);
+                    const wasi_isSudo = wasi_isOwner || sudoList.includes(senderNum);
 
                     // Pass all context to plugin, including owner and sudo flags
                     await plugin.wasi_handler(

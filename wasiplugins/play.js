@@ -20,10 +20,9 @@ module.exports = {
         }
         const query = wasi_args.join(' ');
         try {
-            // Dynamically require heavy dependencies only when needed
+            // Dynamically require dependencies
             const ytSearch = require('yt-search');
-            const youtubedl = require('youtube-dl-exec');
-            const axios = require('axios');
+            const ytdl = require('@distube/ytdl-core');
 
             // Search YouTube for the query
             const searchResult = await ytSearch(query);
@@ -32,30 +31,28 @@ module.exports = {
             }
             const video = searchResult.videos[0];
 
-            // Use youtube-dl-exec to get direct audio URL (best audio)
-            const info = await youtubedl(video.url, {
-                dumpSingleJson: true,
-                noCheckCertificates: true,
-                noWarnings: true,
-                preferFreeFormats: true,
-                format: 'bestaudio[ext=m4a]/bestaudio'
+            // Inform user it's downloading
+            // await wasi_sock.sendMessage(wasi_origin, { text: `⏳ Downloading: *${video.title}*...` }, { quoted: wasi_msg });
+
+            // Download using ytdl-core (pure JS, no Python needed)
+            const stream = ytdl(video.url, {
+                filter: 'audioonly',
+                quality: 'highestaudio',
             });
-            const audioUrl = info.url || (info.formats && info.formats.find(f => f.acodec !== 'none')?.url);
-            if (!audioUrl) {
-                throw new Error('Unable to obtain audio URL');
+
+            const chunks = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
             }
+            const buffer = Buffer.concat(chunks);
 
-            // Download audio into buffer (limit size for safety)
-            const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-            const buffer = Buffer.from(response.data);
-
-            // Send the audio as a voice note (ptt: false)
+            // Send the audio
             await wasi_sock.sendMessage(wasi_origin, {
                 audio: buffer,
-                mimetype: info.ext ? `audio/${info.ext}` : 'audio/mpeg',
+                mimetype: 'audio/mpeg',
                 ptt: false,
-                caption: `▶️ Playing: ${video.title}`
             }, { quoted: wasi_msg });
+
         } catch (err) {
             console.error('Play command error:', err);
             await wasi_sock.sendMessage(wasi_origin, {

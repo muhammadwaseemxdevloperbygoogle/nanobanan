@@ -57,6 +57,8 @@ const wasi_botConfigSchema = new mongoose.Schema({
     welcomeMessage: { type: String, default: '' },
     goodbyeMessage: { type: String, default: '' },
     ownerName: { type: String, default: 'Wasi' },
+    ownerNumber: { type: String, default: '' },
+    ownerJid: { type: String, default: '' },
     sudo: { type: [String], default: [] }, // Array of Sudo JIDs
     autoStatusSeen: { type: Boolean, default: false },
     autoStatusReact: { type: Boolean, default: false },

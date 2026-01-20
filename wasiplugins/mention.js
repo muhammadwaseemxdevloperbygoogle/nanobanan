@@ -10,21 +10,16 @@ module.exports = {
         const config = require('../wasi');
 
         if (!wasi_isOwner && !wasi_isSudo) {
-            // Double check config directly just in case context is stale
-            const configOwner = config.ownerNumber;
-            const envOwner = process.env.OWNER_NUMBER;
-            const senderNum = wasi_sender.split('@')[0];
+            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+            const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+            const botNum = botJid.split('@')[0].split(':')[0];
+            const senderNum = wasi_sender.split('@')[0].split(':')[0];
 
-            const isKwOwner = (senderNum === configOwner) || (senderNum === envOwner);
+            const isKwOwner = (wasi_sender === botJid) || (senderNum === botNum) || (senderNum === config.ownerNumber) || (senderNum === process.env.OWNER_NUMBER);
             const sudoList = config.sudo || [];
 
             if (!isKwOwner) {
-                // Check Sudo list with flexibility
-                const isKwSudo = sudoList.some(sudoJid => {
-                    const cleanSudo = sudoJid.replace('@s.whatsapp.net', '').replace(/[^0-9]/g, '');
-                    return cleanSudo === senderNum;
-                });
-
+                const isKwSudo = sudoList.some(s => s.replace(/[^0-9]/g, '') === senderNum);
                 if (!isKwSudo) {
                     return await wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only the Owner or Sudo users can use this command.' }, { quoted: wasi_msg });
                 }
