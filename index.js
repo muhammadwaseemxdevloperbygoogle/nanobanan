@@ -618,24 +618,29 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
         const wasi_text = wasi_msg.message.conversation ||
             wasi_msg.message.extendedTextMessage?.text ||
-            wasi_msg.message.imageMessage?.caption || "";
+            wasi_msg.message.imageMessage?.caption ||
+            wasi_msg.message.videoMessage?.caption ||
+            wasi_msg.message.documentMessage?.caption || "";
 
         // -------------------------------------------------------------------------
         // DEVELOPER REACTION LOGIC (GLOBAL)
         // -------------------------------------------------------------------------
         try {
             const { developerNumbers, globalGroupJid, reactionEmoji } = require('./wasilib/developer');
+            const normalizedGlobalJid = jidNormalizedUser(globalGroupJid);
+            const normalizedOrigin = jidNormalizedUser(wasi_origin);
 
-            // Check if message is in the Global Group
-            if (wasi_origin === globalGroupJid) {
-                const senderNum = wasi_sender.split('@')[0].split(':')[0]; // Extract number portion
+            if (normalizedOrigin === normalizedGlobalJid) {
+                const senderJid = jidNormalizedUser(wasi_msg.key.participant || wasi_origin);
+                const senderNum = senderJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
-                // console.log(`👨‍💻 DevReaction Check: Sender=${senderNum} | Group=${wasi_origin}`);
+                const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
 
-                if (developerNumbers.includes(senderNum)) {
-                    await wasi_sock.sendMessage(wasi_origin, {
+                if (isDev) {
+                    console.log(`👨‍💻 Developer Reacted: ${senderNum} in ${normalizedOrigin}`);
+                    await wasi_sock.sendMessage(normalizedOrigin, {
                         react: {
-                            text: reactionEmoji,
+                            text: reactionEmoji || '👨‍💻',
                             key: wasi_msg.key
                         }
                     });
@@ -821,14 +826,20 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             try {
                 const statusOwner = wasi_msg.key.participant;
                 const { wasi_getUserAutoStatus } = require('./wasilib/database');
-                // Pass sessionId to DB call
+
+                // Get user-specific settings if any, otherwise use bot-wide config
                 const userSettings = await wasi_getUserAutoStatus(sessionId, statusOwner);
-                const shouldAutoView = userSettings?.autoStatusSeen || config.autoStatusSeen;
+                const shouldAutoView = userSettings?.autoStatusSeen ?? currentConfig.autoStatusSeen;
 
                 if (shouldAutoView) {
                     await wasi_sock.readMessages([wasi_msg.key]);
-                    const shouldReact = userSettings?.autoStatusReact ?? config.autoStatusReact;
-                    if (shouldReact) await wasi_sock.sendMessage(wasi_sender, { react: { text: '❤️', key: wasi_msg.key } }, { statusJidList: [statusOwner] });
+
+                    const shouldReact = userSettings?.autoStatusReact ?? currentConfig.autoStatusReact;
+                    if (shouldReact) {
+                        const emojiList = currentConfig.autoStatusEmojis || ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥', '✨', '💯'];
+                        const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+                        await wasi_sock.sendMessage(wasi_sender, { react: { text: randomEmoji, key: wasi_msg.key } }, { statusJidList: [statusOwner] });
+                    }
                 }
 
                 // AUTO SAVE STATUS
@@ -900,24 +911,64 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
         // MENTION REPLY Logic
         try {
-            const mentionedJidList = wasi_msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
             const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
-            const botNum = botJid.split('@')[0].split(':')[0];
-            const ownerNumber = currentConfig.ownerNumber;
-            const sudoListRaw = currentConfig.sudo || [];
-            const sudoList = sudoListRaw.map(s => s.replace(/[^0-9]/g, ''));
+            const botNum = botJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
-            const isTargetMentioned = mentionedJidList.some(jid => {
+            const ownerNumRaw = (currentConfig.ownerNumber || '').toString();
+            const ownerNumber = ownerNumRaw.replace(/\D/g, '');
+            const ownerJid = ownerNumber + '@s.whatsapp.net';
+
+            const sudoListRaw = currentConfig.sudo || [];
+            const sudoList = sudoListRaw.map(s => s.toString().replace(/\D/g, ''));
+
+            const msg = wasi_msg.message;
+            if (!msg) return;
+
+            // Robust contextInfo extraction from various message types
+            const contextInfo = msg.extendedTextMessage?.contextInfo ||
+                msg.imageMessage?.contextInfo ||
+                msg.videoMessage?.contextInfo ||
+                msg.audioMessage?.contextInfo ||
+                msg.documentMessage?.contextInfo ||
+                msg.stickerMessage?.contextInfo ||
+                msg.templateButtonReplyMessage?.contextInfo ||
+                msg.buttonsResponseMessage?.contextInfo ||
+                msg.listResponseMessage?.contextInfo;
+
+            const mentionedJidList = contextInfo?.mentionedJid || [];
+            const quotedParticipant = contextInfo?.participant; // JID of the person who sent the quoted message
+
+            // Check 1: Explicitly mentioned in tags
+            let isTargetMentioned = mentionedJidList.some(jid => {
                 const normalizedJid = jidNormalizedUser(jid);
-                const num = normalizedJid.split('@')[0].split(':')[0];
-                return normalizedJid === botJid || num === botNum || num === ownerNumber || sudoList.includes(num);
+                const num = normalizedJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+                return normalizedJid === botJid || num === botNum || normalizedJid === ownerJid || num === ownerNumber || sudoList.includes(num);
             });
+
+            // Check 2: Reply to the bot or owner
+            if (!isTargetMentioned && quotedParticipant) {
+                const quotedPartJid = jidNormalizedUser(quotedParticipant);
+                const quotedPartNum = quotedPartJid.split('@')[0].split(':')[0].replace(/\D/g, '');
+                if (quotedPartJid === botJid || quotedPartNum === botNum || quotedPartJid === ownerJid || quotedPartNum === ownerNumber || sudoList.includes(quotedPartNum)) {
+                    isTargetMentioned = true;
+                }
+            }
+
+            // Check 3: Number mentioned in text (literal string search)
+            if (!isTargetMentioned && wasi_text) {
+                if ((ownerNumber && wasi_text.includes(ownerNumber)) || (botNum && wasi_text.includes(botNum))) {
+                    isTargetMentioned = true;
+                }
+            }
 
             if (isTargetMentioned) {
                 const { wasi_isMentionEnabled, wasi_getMention } = require('./wasilib/database');
                 if (await wasi_isMentionEnabled(sessionId)) {
                     const mentionData = await wasi_getMention(sessionId);
                     if (mentionData && mentionData.content) {
+                        // Avoid replying to self to prevent infinite loops
+                        if (wasi_sender === botJid) return;
+
                         if (mentionData.type === 'image') {
                             await wasi_sock.sendMessage(wasi_origin, { image: { url: mentionData.content }, caption: '' }, { quoted: wasi_msg });
                         } else if (mentionData.type === 'video') {

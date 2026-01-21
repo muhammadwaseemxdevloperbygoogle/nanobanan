@@ -60,9 +60,10 @@ const wasi_botConfigSchema = new mongoose.Schema({
     ownerNumber: { type: String, default: '' },
     ownerJid: { type: String, default: '' },
     sudo: { type: [String], default: [] }, // Array of Sudo JIDs
-    autoStatusSeen: { type: Boolean, default: false },
-    autoStatusReact: { type: Boolean, default: false },
-    autoStatusSave: { type: Boolean, default: false } // New field
+    autoStatusSeen: { type: Boolean, default: true },
+    autoStatusReact: { type: Boolean, default: true },
+    autoStatusSave: { type: Boolean, default: false },
+    autoStatusEmojis: { type: [String], default: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥'] }
 });
 
 const wasi_groupSettingsSchema = new mongoose.Schema({

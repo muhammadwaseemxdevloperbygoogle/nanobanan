@@ -29,9 +29,10 @@ module.exports = {
     // AUTO FEATURES (true / false)
     // ---------------------------------------------------------------------------
     autoReadMessages: false,      // Automatically mark messages as read (blue ticks)
-    autoStatusSeen: true,         // Automatically view status updates and react with heart
-    autoStatusReact: true,        // React with heart emoji on status
-    autoStatusMessage: true,      // Send "Your status has been seen by WASI BOT" message
+    autoStatusSeen: true,         // Automatically view status updates
+    autoStatusReact: true,        // React with emoji on status
+    autoStatusEmojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥', '✨', '💯'], // List of emojis for random reaction
+    autoStatusMessage: false,      // Send "Your status has been seen" message (Disabled by default for safety)
     autoWelcome: false,           // Auto welcome new group members
     autoGoodbye: false,           // Auto goodbye left group members
     welcomeMessage: "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT",

@@ -349,6 +349,14 @@
 
                     <!-- Welcome/Goodbye Custom Text -->
                     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white/5 p-4 rounded-xl md:col-span-2">
+                            <label class="block text-gray-400 text-sm mb-2">✨ Auto Status Emojis (Comma
+                                separated)</label>
+                            <input type="text" id="cfg-autoStatusEmojis" placeholder="❤️,🧡,💛,💚,💙,💜,🌈,🔥"
+                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none">
+                            <p class="text-xs text-gray-500 mt-1">These emojis will be used randomly for status
+                                reactions.</p>
+                        </div>
                         <div class="bg-white/5 p-4 rounded-xl">
                             <label class="block text-gray-400 text-sm mb-2">👋 Welcome Message</label>
                             <textarea id="cfg-welcomeMessage" rows="3"
@@ -626,6 +634,8 @@
                 document.getElementById('cfg-autoGoodbye').checked = !!data.autoGoodbye;
                 document.getElementById('cfg-autoReplyEnabled').checked = !!data.autoReplyEnabled;
 
+                document.getElementById('cfg-autoStatusEmojis').value = (data.autoStatusEmojis || []).join(',');
+
                 document.getElementById('cfg-welcomeMessage').value = data.welcomeMessage || "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT";
                 document.getElementById('cfg-goodbyeMessage').value = data.goodbyeMessage || "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT";
 
@@ -697,6 +707,7 @@
                 autoRecording: document.getElementById('cfg-autoRecording').checked,
                 alwaysOnline: document.getElementById('cfg-alwaysOnline').checked,
                 autoReplyEnabled: document.getElementById('cfg-autoReplyEnabled').checked,
+                autoStatusEmojis: document.getElementById('cfg-autoStatusEmojis').value.split(',').map(e => e.trim()).filter(e => e.length > 0),
 
                 autoReplies: getRepliesFromUI()
             };

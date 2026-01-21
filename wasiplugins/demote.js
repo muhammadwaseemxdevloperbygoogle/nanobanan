@@ -1,57 +1,47 @@
+const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+
 module.exports = {
     name: 'demote',
     category: 'Group',
     desc: 'Demote admin to member',
-    ownerOnly: false,
-    wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { wasi_msg, wasi_args } = context;
+    wasi_handler: async (wasi_sock, wasi_chatId, context) => {
+        const { wasi_msg, wasi_args, wasi_isGroup, wasi_isAdmin, wasi_botIsAdmin, wasi_isOwner, wasi_isSudo } = context;
 
-        if (!wasi_sender.endsWith('@g.us')) {
-            return wasi_sock.sendMessage(wasi_sender, { text: '❌ This command only works in groups!' });
+        if (!wasi_isGroup) return wasi_sock.sendMessage(wasi_chatId, { text: '❌ This command only works in groups.' }, { quoted: wasi_msg });
+
+        if (!wasi_isAdmin && !wasi_isSudo) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only Group Admins can use this command.' }, { quoted: wasi_msg });
+        }
+
+        if (!wasi_botIsAdmin) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❌ I need to be an Admin to demote members.' }, { quoted: wasi_msg });
+        }
+
+        let usersToDemote = [];
+        const quoted = wasi_msg.message?.extendedTextMessage?.contextInfo?.participant;
+        const mentioned = wasi_msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
+        if (quoted) {
+            usersToDemote.push(jidNormalizedUser(quoted));
+        } else if (mentioned.length > 0) {
+            usersToDemote = mentioned.map(j => jidNormalizedUser(j));
+        } else if (wasi_args.length > 0) {
+            const rawNumber = wasi_args[0].replace(/\D/g, '');
+            if (rawNumber.length >= 7) {
+                usersToDemote.push(jidNormalizedUser(rawNumber + '@s.whatsapp.net'));
+            }
+        }
+
+        if (usersToDemote.length === 0) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❓ Usage: Tag user(s), reply to a message, or provide a number.\nExample: *.demote @user*' }, { quoted: wasi_msg });
         }
 
         try {
-            const groupMeta = await wasi_sock.groupMetadata(wasi_sender);
-            const botId = wasi_sock.user.id.replace(/:.*@/, '@');
-            const senderId = wasi_msg.key.participant || wasi_sender;
-
-            const botAdmin = groupMeta.participants.find(p => p.id.includes(botId.split('@')[0]))?.admin;
-            if (!botAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ Bot must be admin to demote members!' });
-            }
-
-            const senderAdmin = groupMeta.participants.find(p => p.id === senderId)?.admin;
-            if (!senderAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ You must be an admin to use this command!' });
-            }
-
-            let usersToDemote = [];
-            const mentioned = wasi_msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            const quoted = wasi_msg.message.extendedTextMessage?.contextInfo?.participant;
-
-            if (mentioned.length > 0) {
-                usersToDemote = mentioned;
-            } else if (quoted) {
-                usersToDemote = [quoted];
-            } else if (wasi_args) {
-                const number = wasi_args.replace(/[^0-9]/g, '');
-                if (number) usersToDemote = [`${number}@s.whatsapp.net`];
-            }
-
-            if (usersToDemote.length === 0) {
-                return wasi_sock.sendMessage(wasi_sender, {
-                    text: '❌ *Mention or reply to user(s) to demote!*\n\nUsage: `.demote @user`'
-                });
-            }
-
-            await wasi_sock.groupParticipantsUpdate(wasi_sender, usersToDemote, 'demote');
-            await wasi_sock.sendMessage(wasi_sender, {
-                text: `✅ Successfully demoted ${usersToDemote.length} admin(s) to member!`
-            });
-
-        } catch (error) {
-            console.error('Demote error:', error);
-            await wasi_sock.sendMessage(wasi_sender, { text: '❌ Failed to demote member(s).' });
+            await wasi_sock.groupParticipantsUpdate(wasi_chatId, usersToDemote, 'demote');
+            await wasi_sock.sendMessage(wasi_chatId, { text: `✅ Successfully demoted ${usersToDemote.length} admin(s).` }, { quoted: wasi_msg });
+        } catch (e) {
+            console.error('Demote Command Error:', e);
+            await wasi_sock.sendMessage(wasi_chatId, { text: `❌ Failed to demote user(s).` }, { quoted: wasi_msg });
         }
     }
 };

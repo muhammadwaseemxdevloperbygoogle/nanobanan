@@ -101,6 +101,7 @@ module.exports = {
         }
 
         await wasi_setMention(config.sessionId, { type, content, mimetype });
+        await wasi_toggleMention(config.sessionId, true); // Auto-enable when set
 
         if (type === 'text') {
             await wasi_sock.sendMessage(wasi_msg.key.remoteJid, { text: `✅ Mention Reply updated to text:\n\n"${content}"` }, { quoted: wasi_msg });

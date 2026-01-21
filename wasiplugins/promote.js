@@ -1,63 +1,47 @@
+const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+
 module.exports = {
     name: 'promote',
     category: 'Group',
     desc: 'Promote member to admin',
-    ownerOnly: false,
-    wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { wasi_msg, wasi_args } = context;
+    wasi_handler: async (wasi_sock, wasi_chatId, context) => {
+        const { wasi_msg, wasi_args, wasi_isGroup, wasi_isAdmin, wasi_botIsAdmin, wasi_isOwner, wasi_isSudo } = context;
 
-        // Check if in group
-        if (!wasi_sender.endsWith('@g.us')) {
-            return wasi_sock.sendMessage(wasi_sender, { text: '❌ This command only works in groups!' });
+        if (!wasi_isGroup) return wasi_sock.sendMessage(wasi_chatId, { text: '❌ This command only works in groups.' }, { quoted: wasi_msg });
+
+        if (!wasi_isAdmin && !wasi_isSudo) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only Group Admins can use this command.' }, { quoted: wasi_msg });
+        }
+
+        if (!wasi_botIsAdmin) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❌ I need to be an Admin to promote members.' }, { quoted: wasi_msg });
+        }
+
+        let usersToPromote = [];
+        const quoted = wasi_msg.message?.extendedTextMessage?.contextInfo?.participant;
+        const mentioned = wasi_msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
+        if (quoted) {
+            usersToPromote.push(jidNormalizedUser(quoted));
+        } else if (mentioned.length > 0) {
+            usersToPromote = mentioned.map(j => jidNormalizedUser(j));
+        } else if (wasi_args.length > 0) {
+            const rawNumber = wasi_args[0].replace(/\D/g, '');
+            if (rawNumber.length >= 7) {
+                usersToPromote.push(jidNormalizedUser(rawNumber + '@s.whatsapp.net'));
+            }
+        }
+
+        if (usersToPromote.length === 0) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❓ Usage: Tag user(s), reply to a message, or provide a number.\nExample: *.promote @user*' }, { quoted: wasi_msg });
         }
 
         try {
-            // Get group metadata
-            const groupMeta = await wasi_sock.groupMetadata(wasi_sender);
-            const botId = wasi_sock.user.id.replace(/:.*@/, '@');
-            const senderId = wasi_msg.key.participant || wasi_sender;
-
-            // Check if bot is admin
-            const botAdmin = groupMeta.participants.find(p => p.id.includes(botId.split('@')[0]))?.admin;
-            if (!botAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ Bot must be admin to promote members!' });
-            }
-
-            // Check if sender is admin
-            const senderAdmin = groupMeta.participants.find(p => p.id === senderId)?.admin;
-            if (!senderAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ You must be an admin to use this command!' });
-            }
-
-            // Get mentioned users or quoted user
-            let usersToPromote = [];
-            const mentioned = wasi_msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-            const quoted = wasi_msg.message.extendedTextMessage?.contextInfo?.participant;
-
-            if (mentioned.length > 0) {
-                usersToPromote = mentioned;
-            } else if (quoted) {
-                usersToPromote = [quoted];
-            } else if (wasi_args) {
-                // Parse phone number from args
-                const number = wasi_args.replace(/[^0-9]/g, '');
-                if (number) usersToPromote = [`${number}@s.whatsapp.net`];
-            }
-
-            if (usersToPromote.length === 0) {
-                return wasi_sock.sendMessage(wasi_sender, {
-                    text: '❌ *Mention or reply to user(s) to promote!*\n\nUsage: `.promote @user` or reply with `.promote`'
-                });
-            }
-
-            await wasi_sock.groupParticipantsUpdate(wasi_sender, usersToPromote, 'promote');
-            await wasi_sock.sendMessage(wasi_sender, {
-                text: `✅ Successfully promoted ${usersToPromote.length} member(s) to admin!`
-            });
-
-        } catch (error) {
-            console.error('Promote error:', error);
-            await wasi_sock.sendMessage(wasi_sender, { text: '❌ Failed to promote member(s).' });
+            await wasi_sock.groupParticipantsUpdate(wasi_chatId, usersToPromote, 'promote');
+            await wasi_sock.sendMessage(wasi_chatId, { text: `✅ Successfully promoted ${usersToPromote.length} member(s).` }, { quoted: wasi_msg });
+        } catch (e) {
+            console.error('Promote Command Error:', e);
+            await wasi_sock.sendMessage(wasi_chatId, { text: `❌ Failed to promote user(s).` }, { quoted: wasi_msg });
         }
     }
 };

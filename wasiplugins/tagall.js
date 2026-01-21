@@ -1,43 +1,38 @@
 module.exports = {
     name: 'tagall',
-    aliases: ['mentionall', 'everyone'],
+    aliases: ['everyone', 'all'],
     category: 'Group',
     desc: 'Tag all members in the group',
-    ownerOnly: false,
-    wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { wasi_msg, wasi_args } = context;
+    wasi_handler: async (wasi_sock, wasi_chatId, context) => {
+        const { wasi_msg, wasi_args, wasi_isGroup, wasi_isAdmin, wasi_isOwner, wasi_isSudo, wasi_groupMetadata } = context;
 
-        if (!wasi_sender.endsWith('@g.us')) {
-            return wasi_sock.sendMessage(wasi_sender, { text: '❌ This command only works in groups!' });
+        if (!wasi_isGroup) return wasi_sock.sendMessage(wasi_chatId, { text: '❌ This command only works in groups.' }, { quoted: wasi_msg });
+
+        if (!wasi_isAdmin && !wasi_isSudo) {
+            return wasi_sock.sendMessage(wasi_chatId, { text: '❌ Only Group Admins can use this command.' }, { quoted: wasi_msg });
         }
 
         try {
-            const groupMeta = await wasi_sock.groupMetadata(wasi_sender);
-            const senderId = wasi_msg.key.participant || wasi_sender;
+            const metadata = wasi_groupMetadata || await wasi_sock.groupMetadata(wasi_chatId);
+            const participants = metadata.participants;
+            const customMessage = wasi_args.join(' ') || 'No Message';
 
-            // Check if sender is admin
-            const senderAdmin = groupMeta.participants.find(p => p.id === senderId)?.admin;
-            if (!senderAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ Only admins can use tagall!' });
-            }
+            let tagMessage = `┏━━━┓ *TAG ALL* ┏━━━┓\n\n`;
+            tagMessage += `📢 *Message:* ${customMessage}\n`;
+            tagMessage += `👥 *Total:* ${participants.length}\n\n`;
 
-            const participants = groupMeta.participants.map(p => p.id);
-            const message = wasi_args || '📢 *Attention Everyone!*';
-
-            // Build mention text
-            let mentionText = `${message}\n\n`;
-            participants.forEach((p, i) => {
-                mentionText += `@${p.split('@')[0]}${(i + 1) % 5 === 0 ? '\n' : ' '}`;
+            const mentions = [];
+            participants.forEach((mem, i) => {
+                tagMessage += `┃ ➡️ @${mem.id.split('@')[0]}\n`;
+                mentions.push(mem.id);
             });
 
-            await wasi_sock.sendMessage(wasi_sender, {
-                text: mentionText,
-                mentions: participants
-            });
+            tagMessage += `\n┗━━━━━━━━━━━━━━━┛`;
 
-        } catch (error) {
-            console.error('Tagall error:', error);
-            await wasi_sock.sendMessage(wasi_sender, { text: '❌ Failed to tag all members.' });
+            await wasi_sock.sendMessage(wasi_chatId, { text: tagMessage, mentions }, { quoted: wasi_msg });
+        } catch (e) {
+            console.error('TagAll Error:', e);
+            await wasi_sock.sendMessage(wasi_chatId, { text: '❌ Failed to tag all members.' }, { quoted: wasi_msg });
         }
     }
 };
