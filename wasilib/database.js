@@ -102,8 +102,6 @@ function getModel(sessionId, type) {
         default: throw new Error(`Unknown model type: ${type}`);
     }
 }
-// ...(DB CONNECTION and other existing functions)...
-
 // ---------------------------------------------------------------------------
 // BOT CONFIG MANAGEMENT
 // ---------------------------------------------------------------------------
@@ -197,12 +195,6 @@ async function wasi_unregisterSession(sessionId) {
 async function wasi_getAllSessions(sessionId) {
     if (!isConnected) return [];
     try {
-        // Here we default to the current running session's index
-        // or a global index if intended. But for strict isolation,
-        // we might only start what this session knows.
-        // However, usually "getAllSessions" implies server-level knowledge.
-        // If we want total separation, this function might just return the sessionId itself.
-        // BUT, for restart handling, we check the specific session's index file.
         const Model = getModel(sessionId, 'SessionIndex');
         const sessions = await Model.find({});
         return sessions.map(s => s.sessionId);

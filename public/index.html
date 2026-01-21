@@ -247,7 +247,7 @@
                         </div>
                         <div>
                             <label class="block text-gray-400 mb-2">Session ID</label>
-                            <input type="text" id="cfg-sessionId" placeholder="wasi_session"
+                            <input type="text" id="cfg-sessionId" placeholder="wasi_session" onchange="loadConfig()"
                                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
                         </div>
                         <div>
@@ -608,7 +608,8 @@
 
         async function loadConfig() {
             try {
-                const res = await fetch('/api/config');
+                const sessionId = document.getElementById('cfg-sessionId').value || '';
+                const res = await fetch(`/api/config?sessionId=${encodeURIComponent(sessionId)}`);
                 const data = await res.json();
 
                 // Text Inputs
@@ -732,7 +733,8 @@
         }
         async function checkStatus() {
             try {
-                const res = await fetch('/api/status');
+                const sessionId = document.getElementById('cfg-sessionId').value || '';
+                const res = await fetch(`/api/status?sessionId=${encodeURIComponent(sessionId)}`);
                 const data = await res.json();
 
                 const connStatus = document.getElementById('conn-status');

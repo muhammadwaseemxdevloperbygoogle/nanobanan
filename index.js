@@ -111,17 +111,26 @@ async function startSession(sessionId) {
         isConnected: false,
         qr: null,
         reconnectAttempts: 0,
-        messageLog: new Map() // Cache for Antidelete
+        messageLog: new Map(), // Cache for Antidelete
+        config: { ...config } // Default config
     };
     sessions.set(sessionId, sessionState);
+
+    // Load session-specific config from DB
+    const { wasi_getBotConfig } = require('./wasilib/database');
+    const dbConfig = await wasi_getBotConfig(sessionId);
+    if (dbConfig) {
+        sessionState.config = { ...config, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
+    }
 
     // Connect to session (this creates the socket)
     const { wasi_sock, saveCreds } = await wasi_connectSession(false, sessionId);
 
-    // Intercept sendMessage to apply global font style
+    // Intercept sendMessage to apply session-specific font style
     const originalSendMessage = wasi_sock.sendMessage;
     wasi_sock.sendMessage = async (jid, content, options) => {
-        const style = config.fontStyle || 'original';
+        const sessionConfig = sessions.get(sessionId)?.config || config;
+        const style = sessionConfig.fontStyle || 'original';
         if (style !== 'original') {
             if (content.text) {
                 content.text = applyFont(content.text, style);
@@ -138,8 +147,8 @@ async function startSession(sessionId) {
                 forwardingScore: 999,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
-                    newsletterJid: config.newsletterJid || '120363419652241844@newsletter',
-                    newsletterName: config.newsletterName || 'WASI-MD-V7',
+                    newsletterJid: sessionConfig.newsletterJid || '120363419652241844@newsletter',
+                    newsletterName: sessionConfig.newsletterName || 'WASI-MD-V7',
                     serverMessageId: -1
                 }
             };
@@ -235,6 +244,7 @@ async function startSession(sessionId) {
 
 // Get status (defaults to default session, or specific session)
 wasi_app.get('/api/status', async (req, res) => {
+    // Priority: query > config > default
     const sessionId = req.query.sessionId || config.sessionId || 'wasi_session';
     const session = sessions.get(sessionId);
 
@@ -259,79 +269,86 @@ wasi_app.get('/api/status', async (req, res) => {
     });
 });
 
-// Get config
+// Get config for a specific session
 wasi_app.get('/api/config', async (req, res) => {
+    const sessionId = req.query.sessionId || config.sessionId || 'wasi_session';
+    let baseConfig = { ...config };
+
     if (isDbConnected) {
-        const dbReplies = await wasi_getAutoReplies();
+        const { wasi_getBotConfig, wasi_getAutoReplies } = require('./wasilib/database');
+        const dbConfig = await wasi_getBotConfig(sessionId);
+        if (dbConfig) {
+            baseConfig = { ...baseConfig, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
+        }
+
+        const dbReplies = await wasi_getAutoReplies(sessionId);
         if (dbReplies && dbReplies.length > 0) {
-            config.autoReplies = dbReplies;
+            baseConfig.autoReplies = dbReplies;
         }
     }
-    res.json(config);
+    res.json(baseConfig);
 });
 
 // Save config
 wasi_app.post('/api/config', async (req, res) => {
     try {
         const newConfig = req.body;
+        const targetSessionId = newConfig.sessionId || config.sessionId || 'wasi_session';
         const oldUrl = config.mongoDbUrl;
-        const oldSessionId = config.sessionId; // Capture old ID
-        Object.assign(config, newConfig);
 
-        // Check for Session ID Change
-        if (newConfig.sessionId && newConfig.sessionId !== oldSessionId) {
-            console.log(`🔄 Session ID changed from ${oldSessionId} to ${newConfig.sessionId}. Switching sessions...`);
+        // 1. Save to DB if connected (Partitioned by targetSessionId)
+        if (isDbConnected) {
+            const { wasi_updateBotConfig, wasi_saveAutoReplies } = require('./wasilib/database');
+            await wasi_updateBotConfig(targetSessionId, newConfig);
+            if (newConfig.autoReplies) {
+                await wasi_saveAutoReplies(targetSessionId, newConfig.autoReplies);
+            }
+        }
 
-            // Stop old session if running
+        // 2. Handle Global Settings Change (MongoDB URL / Main Session ID)
+        if (newConfig.sessionId && newConfig.sessionId !== config.sessionId) {
+            const oldSessionId = config.sessionId;
+            config.sessionId = newConfig.sessionId; // Update global state
+
             if (sessions.has(oldSessionId)) {
-                const oldSession = sessions.get(oldSessionId);
-                if (oldSession.sock) {
-                    oldSession.sock.end(undefined);
-                }
+                console.log(`Stopping old session ${oldSessionId} due to ID change...`);
+                const old = sessions.get(oldSessionId);
+                if (old.sock) old.sock.end();
                 sessions.delete(oldSessionId);
             }
-
-            // Start new session
             await startSession(newConfig.sessionId);
         }
 
+        if (newConfig.mongoDbUrl && newConfig.mongoDbUrl !== oldUrl) {
+            config.mongoDbUrl = newConfig.mongoDbUrl;
+            console.log('🔗 New MongoDB URL provided. Attempting to connect...');
+            const dbResult = await wasi_connectDatabase(newConfig.mongoDbUrl);
+            if (dbResult) {
+                isDbConnected = true;
+                await restoreAllSessions();
+            }
+        }
+
+        // 3. Hot-Reload specifically for the session being edited
+        const activeItem = sessions.get(targetSessionId);
+        if (activeItem) {
+            activeItem.config = { ...(activeItem.config || config), ...newConfig };
+            console.log(`🔥 Isolated Hot-Reload: ${targetSessionId}`);
+        }
+
+        // 4. Update local file for next startup defaults
         try {
             fs.writeFileSync(path.join(__dirname, 'botConfig.json'), JSON.stringify(config, null, 2));
         } catch (err) { }
 
-        // If a new MongoDB URL is provided and we aren't connected yet, try to connect now
-        if (config.mongoDbUrl && (!isDbConnected || oldUrl !== config.mongoDbUrl)) {
-            console.log('🔗 New MongoDB URL provided. Attempting to connect...');
-            const dbResult = await wasi_connectDatabase(config.mongoDbUrl);
-            if (dbResult) {
-                isDbConnected = true;
-                console.log('✅ Database connected successfully! Initializing sessions...');
-                await restoreAllSessions();
-            } else {
-                return res.json({ success: false, error: 'Failed to connect to the provided MongoDB URL. Please check if it is valid.' });
-            }
-        }
-
-        if (isDbConnected && newConfig.autoReplies) {
-            await wasi_saveAutoReplies(newConfig.autoReplies);
-        }
-
-        // HOT RELOAD CONFIG for all active sessions
-        console.log('Reloading config for active sessions...');
-        for (const [id, session] of sessions) {
-            if (session.config) {
-                // Update the live config object
-                Object.assign(session.config, newConfig);
-                console.log(`Updated config for session ${id}`);
-            }
-        }
-
-        res.json({ success: true, message: 'Configuration saved and applied instantly!' });
+        res.json({ success: true, message: 'Configuration saved and applied to session!' });
     } catch (e) {
         res.json({ success: false, error: e.message });
     }
 });
 
+
+// Pair/Create Session
 // Pair/Create Session
 wasi_app.post('/api/pair', async (req, res) => {
     try {
@@ -499,22 +516,10 @@ async function restoreAllSessions() {
     if (!isDbConnected) return;
 
     const currentSessionId = config.sessionId || 'wasi_session';
-    const savedSessions = await wasi_getAllSessions(currentSessionId);
-    console.log(`🔄 Restoring ${savedSessions.length} sessions from DB...`);
+    console.log(`🔄 Session Sync: Identifying [${currentSessionId}]`);
 
-    // Always ensure the default session exists if list is empty (first run)
-    if (savedSessions.length === 0) {
-        console.log('Creating default session...');
+    if (!sessions.has(currentSessionId)) {
         await startSession(currentSessionId);
-    } else {
-        for (const id of savedSessions) {
-            if (!sessions.has(id)) {
-                startSession(id);
-            }
-        }
-        if (!savedSessions.includes(currentSessionId) && !sessions.has(currentSessionId)) {
-            startSession(currentSessionId);
-        }
     }
 }
 
@@ -1133,17 +1138,8 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         }
     });
 
-    // Actually, I should handle REVOKE in UPSERT.
-    // Let me revert this tool call logic and put it in UPSERT.
-    // I will write the handler here anyway so I don't break the flow,
-    // but I'll make it empty or just logging for now.
-    // Wait, if I write it here, I can listen for 'messages.update' if I want to catch status updates.
-    // But for Anti-Delete, checking UPSERT for protocolMessage is standard.
-
-    // Let's go back to UPSERT and add Protocol Message check.
-    // But I will add this block here to close the loop on 'messages.update' just in case we need it for future.
     wasi_sock.ev.on('messages.update', async (updates) => {
-        // console.log('Message Update:', updates.length);
+        // Handle message updates (like reactions or edits) if needed in future
     });
 }
 
