@@ -55,7 +55,7 @@ function wasi_loadPlugins() {
             }
         }
     }
-    console.log(`✅ Loaded ${wasi_plugins.size} commands`);
+    // console.log(`✅ Loaded ${wasi_plugins.size} commands`);
 }
 // CALL IT IMMEDIATELY
 wasi_loadPlugins();
@@ -194,7 +194,7 @@ async function startSession(sessionId) {
             sessionState.isConnected = true;
             sessionState.qr = null;
             sessionState.reconnectAttempts = 0;
-            console.log(`Session ${sessionId}: Connected successfully!`);
+            console.log(`✅ [CONNECTION] ${sessionId}: Bot is fully connected to WhatsApp and groups.`);
 
             // Register session in DB to ensure it restarts on server reboot
             await wasi_registerSession(sessionId);
@@ -525,6 +525,7 @@ async function main() {
 
     // 2. Load Plugins
     wasi_loadPlugins();
+    console.log(`📡 [SYSTEM] Loaded ${wasi_plugins.size} commands and ready for execution.`);
 
     // 3. Start Server (Always start so dashboard is accessible)
     wasi_startServer();
@@ -557,14 +558,30 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         sessions.get(sessionId).config = initialConfig;
     }
 
-    console.log(`📝 Loaded config for ${sessionId}: prefix="${initialConfig.prefix}"`);
+    // console.log(`📝 Loaded config for ${sessionId}: prefix="${initialConfig.prefix}"`);
+    console.log(`✅ [SESSION] ${sessionId} is now listening for messages...`);
 
     wasi_sock.ev.on('messages.upsert', async wasi_m => {
         const wasi_msg = wasi_m.messages[0];
         if (!wasi_msg.message) return;
 
-        // GET LIVE CONFIG
+        // EXTRACT ALL CONTEXT AT TOP
         const currentConfig = sessions.get(sessionId)?.config || initialConfig;
+        const wasi_origin = wasi_msg.key.remoteJid;
+        const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
+        const wasi_text = wasi_msg.message.conversation ||
+            wasi_msg.message.extendedTextMessage?.text ||
+            wasi_msg.message.imageMessage?.caption ||
+            wasi_msg.message.videoMessage?.caption ||
+            wasi_msg.message.documentMessage?.caption || "";
+
+        // 1. AVOID LOOPS & ALLOW SELF-COMMANDS
+        if (wasi_msg.key.fromMe) {
+            // Only continue if it's a command (starts with prefix)
+            // Or allow some specific non-command logic if needed
+            const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
+            if (!prefixes.some(p => wasi_text.trim().startsWith(p))) return;
+        }
 
         // -------------------------------------------------------------------------
         // MESSAGE CACHING (ANTIDELETE)
@@ -615,17 +632,9 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             if (currentTime - messageTime > 300) return;
         }
 
-        const wasi_origin = wasi_msg.key.remoteJid;
-        const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
-        const wasi_text = wasi_msg.message.conversation ||
-            wasi_msg.message.extendedTextMessage?.text ||
-            wasi_msg.message.imageMessage?.caption ||
-            wasi_msg.message.videoMessage?.caption ||
-            wasi_msg.message.documentMessage?.caption || "";
-
-        if (wasi_text) {
-            console.log(`📩 Message [${sessionId}]: "${wasi_text.slice(0, 50)}${wasi_text.length > 50 ? '...' : ''}" from ${wasi_sender}`);
-        }
+        // if (wasi_text) {
+        //     console.log(`📩 Message [${sessionId}]: "${wasi_text.slice(0, 50)}${wasi_text.length > 50 ? '...' : ''}" from ${wasi_sender}`);
+        // }
 
         // -------------------------------------------------------------------------
         // DEVELOPER/OWNER REACTION LOGIC (GLOBAL)
@@ -706,7 +715,7 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                             });
 
                             const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
-                            console.log(`🔗 Link detected in ${wasi_origin} (BotAdmin: ${isBotAdmin})`);
+                            // console.log(`🔗 Link detected in ${wasi_origin} (BotAdmin: ${isBotAdmin})`);
 
                             // Delete message
                             if (isBotAdmin) {
@@ -738,7 +747,7 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             const isViewOnce = !!viewOnceMsg;
 
             if (isViewOnce) {
-                console.log(`👁️ ViewOnce Detected! Structure found.`);
+                // console.log(`👁️ ViewOnce Detected! Structure found.`);
 
                 const { wasi_getUserAutoStatus } = require('./wasilib/database');
                 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
@@ -747,10 +756,10 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                 const ownerJid = currentConfig.ownerNumber + '@s.whatsapp.net';
                 const ownerSettings = await wasi_getUserAutoStatus(sessionId, ownerJid);
 
-                console.log(`🔎 AutoVV Check: Owner: ${ownerJid} | Enabled: ${ownerSettings?.autoViewOnce}`);
+                // console.log(`🔎 AutoVV Check: Owner: ${ownerJid} | Enabled: ${ownerSettings?.autoViewOnce}`);
 
                 if (ownerSettings?.autoViewOnce) {
-                    console.log('🔓 Auto ViewOnce triggered! Downloading...');
+                    // console.log('🔓 Auto ViewOnce triggered! Downloading...');
 
                     // Extract actual content
                     // V2 structure usually has 'message' inside
@@ -976,12 +985,15 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             }
 
             if (isTargetMentioned) {
+                // NEVER trigger mention reply for own messages (prevent loops)
+                if (wasi_msg.key.fromMe) return;
+
                 const { wasi_isMentionEnabled, wasi_getMention } = require('./wasilib/database');
                 if (await wasi_isMentionEnabled(sessionId)) {
                     const mentionData = await wasi_getMention(sessionId);
                     if (mentionData && mentionData.content) {
-                        // Avoid replying to self to prevent infinite loops
-                        if (wasi_sender === botJid) return;
+                        // Avoid replying to self/bot to prevent infinite loops
+                        if (wasi_sender === botJid || botJids.has(wasi_sender)) return;
 
                         if (mentionData.type === 'image') {
                             await wasi_sock.sendMessage(wasi_origin, { image: { url: mentionData.content }, caption: '' }, { quoted: wasi_msg });
@@ -999,24 +1011,20 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             console.error('Mention Logic Error:', e);
         }
 
-        // COMMANDS
-        console.log(`Debug: Prefix is '${currentConfig.prefix}'`);
-        if (wasi_text.trim().startsWith(currentConfig.prefix)) {
-            const wasi_parts = wasi_text.trim().slice(currentConfig.prefix.length).trim().split(/\s+/);
+        // -------------------------------------------------------------------------
+        // COMMAND HANDLER
+        // -------------------------------------------------------------------------
+        const wasi_trimmed = wasi_text.trim();
+        const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
+        const usedPrefix = prefixes.find(p => wasi_trimmed.startsWith(p));
+
+        if (usedPrefix) {
+            const wasi_parts = wasi_trimmed.slice(usedPrefix.length).trim().split(/\s+/);
             const wasi_cmd_input = wasi_parts[0].toLowerCase();
             const wasi_args = wasi_parts.slice(1);
 
-            console.log(`🔎 Checking command: '${wasi_cmd_input}' | Exists: ${wasi_plugins.has(wasi_cmd_input)}`);
-
-            let plugin;
             if (wasi_plugins.has(wasi_cmd_input)) {
-                plugin = wasi_plugins.get(wasi_cmd_input);
-            }
-
-
-
-
-            if (plugin) {
+                const plugin = wasi_plugins.get(wasi_cmd_input);
                 try {
                     // Context Preparation
                     const isGroup = wasi_origin.endsWith('@g.us');
@@ -1030,33 +1038,16 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                             const participants = groupMetadata.participants;
 
                             // Check Sender Admin Status
-                            const senderMod = participants.find(p => p.id === wasi_msg.key.participant || p.id === wasi_sender);
+                            const senderMod = participants.find(p => jidNormalizedUser(p.id) === wasi_sender);
                             wasi_isAdmin = (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
 
-                            // Check Bot Admin Status (Super Robust)
-                            const { jidNormalizedUser } = require('@whiskeysockets/baileys');
+                            // Check Bot Admin Status
                             const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
-                            const botJids = new Set([
-                                jidNormalizedUser(me?.id),
-                                jidNormalizedUser(me?.jid),
-                                jidNormalizedUser(me?.lid),
-                                jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')
-                            ].filter(Boolean));
+                            const botJids = new Set([jidNormalizedUser(me?.id), jidNormalizedUser(me?.jid), jidNormalizedUser(me?.lid)].filter(Boolean));
 
-                            const botNumbers = new Set();
-                            botJids.forEach(j => botNumbers.add(j.split('@')[0].split(':')[0]));
-
-                            const botMod = participants.find(p => {
-                                const pJid = jidNormalizedUser(p.id);
-                                const pNum = pJid.split('@')[0].split(':')[0];
-                                return botJids.has(pJid) || botNumbers.has(pNum);
-                            });
-
+                            const botMod = participants.find(p => botJids.has(jidNormalizedUser(p.id)));
                             wasi_botIsAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
-                            console.log(`🤖 Bot Admin Check: IDs=[${Array.from(botJids).join(', ')}] | Found=${!!botMod} | Role=${botMod?.admin}`);
-                        } catch (gErr) {
-                            console.error('Error fetching group metadata:', gErr);
-                        }
+                        } catch (gErr) { }
                     }
 
                     // IDENTIFICATION (Owner, Sudo, Bot)
@@ -1064,53 +1055,48 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     const botJids = new Set([
                         jidNormalizedUser(me?.id),
                         jidNormalizedUser(me?.jid),
-                        jidNormalizedUser(me?.lid),
-                        jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')
+                        jidNormalizedUser(me?.lid)
                     ].filter(Boolean));
 
-                    const botNumbers = new Set();
-                    botJids.forEach(j => botNumbers.add(j.split('@')[0].split(':')[0]));
+                    const normSenderJid = jidNormalizedUser(wasi_sender);
+                    const senderNum = normSenderJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
-                    const senderNum = wasi_sender.split('@')[0].split(':')[0].replace(/\D/g, '');
-                    const senderJid = wasi_sender;
-
-                    const ownerNumRaw = (currentConfig.ownerNumber || process.env.OWNER_NUMBER || '').toString();
+                    const ownerNumRaw = (currentConfig.ownerNumber || process.env.OWNER_NUMBER || '923259823531').toString();
                     const ownerNumber = ownerNumRaw.replace(/\D/g, '');
+                    const ownerJids = new Set([ownerNumber + '@s.whatsapp.net', ownerNumber + '@c.us']);
 
                     const sudoListRaw = currentConfig.sudo || [];
                     const sudoList = sudoListRaw.map(s => s.toString().replace(/\D/g, ''));
 
                     // THE MASTER CHECK
-                    const wasi_isOwner = botJids.has(senderJid) || botNumbers.has(senderNum) || (senderNum === ownerNumber) || (senderJid.startsWith(ownerNumber));
-                    const wasi_isSudo = wasi_isOwner || sudoList.includes(senderNum);
+                    const wasi_isOwner = botJids.has(normSenderJid) || ownerJids.has(normSenderJid) || (senderNum === ownerNumber) || sudoList.includes(senderNum);
+                    const wasi_isSudo = wasi_isOwner || sudoList.some(s => senderNum === s);
 
                     if (plugin.ownerOnly && !wasi_isOwner && !wasi_isSudo) {
-                        console.log(`🚫 Security: ${senderJid} (${senderNum}) tried ${plugin.name} | Owner: ${ownerNumber}`);
+                        return await wasi_sock.sendMessage(wasi_origin, { text: `❌ *${plugin.name.toUpperCase()}* is restricted to the Owner.` }, { quoted: wasi_msg });
                     }
 
-                    // Pass all context to plugin, including owner and sudo flags
-                    await plugin.wasi_handler(
-                        wasi_sock,
-                        wasi_origin,
-                        {
-                            wasi_sender, // Sender JID (User)
-                            wasi_msg,
-                            wasi_args,
-                            wasi_plugins,
-                            sessionId,
-                            config: currentConfig,
-                            wasi_text,
-                            wasi_isGroup: isGroup,
-                            wasi_isAdmin,
-                            wasi_botIsAdmin,
-                            wasi_isOwner,
-                            wasi_isSudo,
-                            wasi_groupMetadata: groupMetadata
-                        }
-                    );
+                    // EXECUTE
+                    console.log(`🚀 Executing [${wasi_cmd_input}] for ${normSenderJid}`);
+                    await plugin.wasi_handler(wasi_sock, wasi_origin, {
+                        wasi_sender: normSenderJid,
+                        wasi_msg,
+                        wasi_args,
+                        wasi_plugins,
+                        sessionId,
+                        config: currentConfig,
+                        wasi_text,
+                        wasi_isGroup: isGroup,
+                        wasi_isAdmin,
+                        wasi_botIsAdmin,
+                        wasi_isOwner,
+                        wasi_isSudo,
+                        wasi_groupMetadata: groupMetadata
+                    });
+
                 } catch (err) {
-                    console.error(`Error in plugin ${plugin.name}:`, err);
-                    await wasi_sock.sendMessage(wasi_sender, { text: `❌ Error: ${err.message}` });
+                    console.error(`Error in plugin ${wasi_cmd_input}:`, err);
+                    await wasi_sock.sendMessage(wasi_origin, { text: `❌ Plugin Error: ${err.message}` }, { quoted: wasi_msg });
                 }
             }
         }
