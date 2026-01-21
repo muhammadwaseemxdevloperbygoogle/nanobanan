@@ -301,6 +301,13 @@
 
                         <label
                             class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
+                            <input type="checkbox" id="cfg-autoStatusSave"
+                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
+                            <span class="text-gray-300">Auto Save Status (to Owner)</span>
+                        </label>
+
+                        <label
+                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
                             <input type="checkbox" id="cfg-autoStatusMessage"
                                 class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
                             <span class="text-gray-300">Auto Reply to Status</span>
@@ -627,6 +634,7 @@
                 document.getElementById('cfg-autoReadMessages').checked = !!data.autoReadMessages;
                 document.getElementById('cfg-autoStatusSeen').checked = !!data.autoStatusSeen;
                 document.getElementById('cfg-autoStatusReact').checked = !!data.autoStatusReact;
+                document.getElementById('cfg-autoStatusSave').checked = !!data.autoStatusSave;
                 document.getElementById('cfg-autoStatusMessage').checked = !!data.autoStatusMessage;
                 document.getElementById('cfg-autoTyping').checked = !!data.autoTyping;
                 document.getElementById('cfg-autoRecording').checked = !!data.autoRecording;
@@ -703,6 +711,7 @@
                 autoReadMessages: document.getElementById('cfg-autoReadMessages').checked,
                 autoStatusSeen: document.getElementById('cfg-autoStatusSeen').checked,
                 autoStatusReact: document.getElementById('cfg-autoStatusReact').checked,
+                autoStatusSave: document.getElementById('cfg-autoStatusSave').checked,
                 autoStatusMessage: document.getElementById('cfg-autoStatusMessage').checked,
                 autoTyping: document.getElementById('cfg-autoTyping').checked,
                 autoRecording: document.getElementById('cfg-autoRecording').checked,

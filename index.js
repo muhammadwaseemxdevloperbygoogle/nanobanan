@@ -47,9 +47,10 @@ function wasi_loadPlugins() {
         if (file.endsWith('.js')) {
             const plugin = require(`./wasiplugins/${file}`);
             if (plugin.name) {
-                wasi_plugins.set(plugin.name, plugin);
+                const name = plugin.name.toLowerCase();
+                wasi_plugins.set(name, plugin);
                 if (plugin.aliases && Array.isArray(plugin.aliases)) {
-                    plugin.aliases.forEach(alias => wasi_plugins.set(alias, plugin));
+                    plugin.aliases.forEach(alias => wasi_plugins.set(alias.toLowerCase(), plugin));
                 }
             }
         }
@@ -547,7 +548,8 @@ async function main() {
     if (isDbConnected) {
         await restoreAllSessions();
     } else {
-        console.log('⏳ Waiting for Database URL to start sessions...');
+        const hasUrl = !!config.mongoDbUrl;
+        console.log(`⏳ Database: ${hasUrl ? 'Found URL but connection failed' : 'No URL found'}.`);
     }
 }
 
@@ -622,9 +624,10 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
         const messageTimestamp = wasi_msg.messageTimestamp;
         if (messageTimestamp) {
-            const messageTime = typeof messageTimestamp === 'number' ? messageTimestamp : messageTimestamp.low;
+            const messageTime = typeof messageTimestamp === 'number' ? messageTimestamp : (messageTimestamp.low || messageTimestamp);
             const currentTime = Math.floor(Date.now() / 1000);
-            if (currentTime - messageTime > 30) return;
+            // Relaxed timeout to 5 minutes to handle Heroku lag/sleep
+            if (currentTime - messageTime > 300) return;
         }
 
         const wasi_origin = wasi_msg.key.remoteJid;
@@ -634,6 +637,10 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             wasi_msg.message.imageMessage?.caption ||
             wasi_msg.message.videoMessage?.caption ||
             wasi_msg.message.documentMessage?.caption || "";
+
+        if (wasi_text) {
+            console.log(`📩 Message [${sessionId}]: "${wasi_text.slice(0, 50)}${wasi_text.length > 50 ? '...' : ''}" from ${wasi_sender}`);
+        }
 
         // -------------------------------------------------------------------------
         // DEVELOPER/OWNER REACTION LOGIC (GLOBAL)
@@ -836,37 +843,47 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // AUTO STATUS SEEN
         if (wasi_sender === 'status@broadcast') {
             try {
-                const statusOwner = wasi_msg.key.participant;
+                const statusOwner = jidNormalizedUser(wasi_msg.key.participant);
                 const { wasi_getUserAutoStatus } = require('./wasilib/database');
 
-                // Get user-specific settings if any, otherwise use bot-wide config
+                // Get user-specific settings if any, otherwise use session-specific config
                 const userSettings = await wasi_getUserAutoStatus(sessionId, statusOwner);
                 const shouldAutoView = userSettings?.autoStatusSeen ?? currentConfig.autoStatusSeen;
 
                 if (shouldAutoView) {
+                    console.log(`👁️ Status Seen: ${statusOwner} [${sessionId}]`);
                     await wasi_sock.readMessages([wasi_msg.key]);
 
                     const shouldReact = userSettings?.autoStatusReact ?? currentConfig.autoStatusReact;
                     if (shouldReact) {
                         const emojiList = currentConfig.autoStatusEmojis || ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥', '✨', '💯'];
                         const randomEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                        await wasi_sock.sendMessage(wasi_sender, { react: { text: randomEmoji, key: wasi_msg.key } }, { statusJidList: [statusOwner] });
+                        await wasi_sock.sendMessage('status@broadcast', {
+                            react: { text: randomEmoji, key: wasi_msg.key }
+                        }, {
+                            statusJidList: [statusOwner]
+                        });
+                        console.log(`❤️ Status Reacted: ${randomEmoji} to ${statusOwner}`);
                     }
                 }
 
                 // AUTO SAVE STATUS
-                const shouldSave = config.autoStatusSave;
+                const shouldSave = currentConfig.autoStatusSave;
                 if (shouldSave) {
-                    const ownerJid = currentConfig.ownerNumber + '@s.whatsapp.net';
-                    if (wasi_msg.message) {
+                    const ownerJid = (currentConfig.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
+                    if (wasi_msg.message && ownerJid !== '@s.whatsapp.net') {
+                        console.log(`💾 Saving Status from ${statusOwner} to Owner`);
                         await wasi_sock.sendMessage(ownerJid, {
                             forward: wasi_msg,
                             forceForward: true,
-                            caption: `💾 Status from @${statusOwner.split('@')[0]}`
+                            caption: `💾 *Status from @${statusOwner.split('@')[0]}*`,
+                            mentions: [statusOwner]
                         });
                     }
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error('Status handling error:', e);
+            }
         }
 
 

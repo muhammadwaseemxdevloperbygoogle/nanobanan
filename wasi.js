@@ -2,48 +2,49 @@ require('dotenv').config();
 
 module.exports = {
     // ---------------------------------------------------------------------------
-    // BASIC SETTINGS (Edit these)
+    // BASIC SETTINGS
     // ---------------------------------------------------------------------------
     botName: process.env.BOT_NAME || 'WASI BOT',
-    ownerName: 'MR WASI DEV',
-    ownerNumber: process.env.OWNER_NUMBER || '923259823531', // Your WhatsApp number without + or spaces
-    prefix: '.',
-    mode: process.env.MODE || 'public', // public / private put public if you want to use it in public group    
-    sessionId: process.env.SESSION_ID || 'wasi_session', // Unique ID to separate data in MongoDB
-    sudo: process.env.SUDO ? process.env.SUDO.split(',') : [], // Comma separated numbers e.g. 92300...,92301...
+    ownerName: process.env.OWNER_NAME || 'MR WASI DEV',
+    ownerNumber: process.env.OWNER_NUMBER || '923259823531',
+    prefix: process.env.PREFIX || '.',
+    mode: process.env.MODE || 'public',
+    sessionId: process.env.SESSION_ID || 'wasi_session',
+    sudo: process.env.SUDO ? process.env.SUDO.split(',') : [],
+    mongoDbUrl: process.env.MONGODB_URI || process.env.MONGODB_URL || '',
 
-    // -----------------------powered by mrwasi.dev----------------------------------------------------
+    // ---------------------------------------------------------------------------
     // TIME & REGION
     // ---------------------------------------------------------------------------
-    timeZone: 'Asia/Karachi',
+    timeZone: process.env.TIME_ZONE || 'Asia/Karachi',
 
     // ---------------------------------------------------------------------------
     // VISUALS
     // ---------------------------------------------------------------------------
-    fontStyle: process.env.FONT_STYLE || 'original', // original, typewriter, bold, italic, circle, etc.
-    menuStyle: process.env.MENU_STYLE || 'classic', // classic, simple, bold, tech, aesthetic
-    // ---------------------------------------------------------------------------
+    fontStyle: process.env.FONT_STYLE || 'original',
+    menuStyle: process.env.MENU_STYLE || 'classic',
     menuImage: process.env.BOT_MENU_IMAGE_URL || 'https://graph.org/file/7c6999908a8df07400d41.jpg',
 
     // ---------------------------------------------------------------------------
-    // AUTO FEATURES (true / false)
+    // AUTO FEATURES
     // ---------------------------------------------------------------------------
-    autoReadMessages: false,      // Automatically mark messages as read (blue ticks)
-    autoStatusSeen: true,         // Automatically view status updates
-    autoStatusReact: true,        // React with emoji on status
-    autoStatusEmojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥', '✨', '💯'], // List of emojis for random reaction
-    autoStatusMessage: false,      // Send "Your status has been seen" message (Disabled by default for safety)
-    autoWelcome: false,           // Auto welcome new group members
-    autoGoodbye: false,           // Auto goodbye left group members
-    welcomeMessage: "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT",
-    goodbyeMessage: "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT",
+    autoReadMessages: process.env.AUTO_READ === 'true' || false,
+    autoStatusSeen: process.env.AUTO_STATUS_SEEN !== 'false', // Default true
+    autoStatusReact: process.env.AUTO_STATUS_REACT !== 'false', // Default true
+    autoStatusSave: process.env.AUTO_STATUS_SAVE === 'true' || false,
+    autoStatusEmojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥', '✨', '💯'],
+    autoStatusMessage: process.env.AUTO_STATUS_MSG === 'true' || false,
+    autoWelcome: process.env.AUTO_WELCOME === 'true' || false,
+    autoGoodbye: process.env.AUTO_GOODBYE === 'true' || false,
+    welcomeMessage: process.env.WELCOME_MSG || "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT",
+    goodbyeMessage: process.env.GOODBYE_MSG || "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT",
 
     // ---------------------------------------------------------------------------
-    // PRESENCE / APPEARANCE (true / false)
+    // PRESENCE
     // ---------------------------------------------------------------------------
-    autoTyping: false,            // Show "typing..." before sending messages
-    autoRecording: false,         // Show "recording audio..." in chats
-    alwaysOnline: true,           // Show the bot as "Online" all the time
+    autoTyping: process.env.AUTO_TYPING === 'true' || false,
+    autoRecording: process.env.AUTO_RECORDING === 'true' || false,
+    alwaysOnline: process.env.ALWAYS_ONLINE !== 'false',
 
     // ---------------------------------------------------------------------------
     // AUTO REPLIES
@@ -56,13 +57,8 @@ module.exports = {
     ],
 
     // ---------------------------------------------------------------------------
-    // DATABASE
+    // NEWSLETTER
     // ---------------------------------------------------------------------------
-    mongoDbUrl: process.env.MONGODB_URI || process.env.MONGODB_URL || '',
-
-    // ---------------------------------------------------------------------------
-    // NEWSLETTER / CHANNEL
-    // ---------------------------------------------------------------------------
-    newsletterJid: '120363419652241844@newsletter',
-    newsletterName: 'WASI-MD-V7',
+    newsletterJid: process.env.NEWSLETTER_JID || '120363419652241844@newsletter',
+    newsletterName: process.env.NEWSLETTER_NAME || 'WASI-MD-V7',
 };
