@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WASI-MD V7 | Setup</title>
+    <title>WASI-MD V7 | Connect</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -71,11 +71,31 @@
                 opacity: 0.6;
             }
         }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+        }
     </style>
 </head>
 
 <body class="gradient-bg min-h-screen text-white">
-    <!-- Background -->
+    <!-- Background Effects -->
     <div class="fixed inset-0 overflow-hidden pointer-events-none">
         <div class="absolute top-20 left-10 w-72 h-72 bg-green-500/10 rounded-full blur-3xl"></div>
         <div class="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
@@ -96,13 +116,15 @@
             <div class="glass-card rounded-xl p-4 flex flex-wrap items-center justify-center gap-6">
                 <div class="flex items-center gap-2">
                     <span class="text-gray-400">Connection:</span>
-                    <span id="conn-status" class="px-3 py-1 rounded-full text-sm bg-yellow-500/20 text-yellow-400">Not
-                        Connected</span>
+                    <span id="conn-status" class="px-3 py-1 rounded-full text-sm bg-yellow-500/20 text-yellow-400">
+                        Waiting...
+                    </span>
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="text-gray-400">Database:</span>
-                    <span id="db-status"
-                        class="px-3 py-1 rounded-full text-sm bg-gray-500/20 text-gray-400">Checking...</span>
+                    <span id="db-status" class="px-3 py-1 rounded-full text-sm bg-gray-500/20 text-gray-400">
+                        Checking...
+                    </span>
                 </div>
             </div>
         </div>
@@ -120,10 +142,6 @@
                             class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded-xl transition-all flex items-center gap-2">
                             📢 Join Channel
                         </a>
-                        <button onclick="enterConfigMode()"
-                            class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-xl transition-all">
-                            ⚙️ Configure
-                        </button>
                         <button onclick="disconnect()"
                             class="bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold py-2 px-6 rounded-xl transition-all">
                             Disconnect
@@ -132,30 +150,41 @@
                 </div>
             </div>
 
-            <!-- Setup View -->
+            <!-- Connection Options View -->
             <div id="setup-view">
-                <!-- Tabs -->
-                <div class="flex justify-center mb-8">
-                    <div class="glass-card rounded-xl p-1 flex">
-                        <button id="tab-pair" onclick="showTab('pair')"
-                            class="tab-active px-6 py-3 rounded-lg font-semibold transition-all">
-                            🔢 Pair Code
+                <!-- Method Selection -->
+                <div id="method-selection" class="glass-card rounded-3xl p-8 text-center">
+                    <div class="text-6xl mb-6">🔗</div>
+                    <h2 class="text-2xl font-semibold mb-2">Connect Your WhatsApp</h2>
+                    <p class="text-gray-400 mb-8">Choose your preferred connection method</p>
+
+                    <div class="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                        <!-- Pair Code Option -->
+                        <button onclick="selectMethod('pair')"
+                            class="glass-card rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer border-2 border-transparent hover:border-green-500/50">
+                            <div class="text-5xl mb-4 group-hover:scale-110 transition-transform">🔢</div>
+                            <h3 class="text-xl font-semibold text-green-400 mb-2">Pair Code</h3>
+                            <p class="text-gray-400 text-sm">Enter your phone number to get a pairing code</p>
                         </button>
-                        <button id="tab-config" onclick="showTab('config')"
-                            class="px-6 py-3 rounded-lg font-semibold transition-all hover:bg-white/10">
-                            ⚙️ Config
-                        </button>
-                        <button id="tab-qr" onclick="showTab('qr')"
-                            class="px-6 py-3 rounded-lg font-semibold transition-all hover:bg-white/10">
-                            📱 QR Code
+
+                        <!-- QR Code Option -->
+                        <button onclick="selectMethod('qr')"
+                            class="glass-card rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer border-2 border-transparent hover:border-purple-500/50">
+                            <div class="text-5xl mb-4 group-hover:scale-110 transition-transform">📱</div>
+                            <h3 class="text-xl font-semibold text-purple-400 mb-2">QR Code</h3>
+                            <p class="text-gray-400 text-sm">Scan QR code with your WhatsApp app</p>
                         </button>
                     </div>
                 </div>
 
-                <!-- Pairing Code Panel (Primary) -->
-                <div id="pair-panel" class="glass-card rounded-3xl p-8 glow">
+                <!-- Pairing Code Panel -->
+                <div id="pair-panel" class="hidden glass-card rounded-3xl p-8 glow">
                     <div class="text-center">
-                        <div class="text-6xl mb-4">🔗</div>
+                        <button onclick="goBack()"
+                            class="absolute left-8 top-8 text-gray-400 hover:text-white transition-colors">
+                            ← Back
+                        </button>
+                        <div class="text-6xl mb-4">🔢</div>
                         <h2 class="text-2xl font-semibold mb-2">Connect with Pairing Code</h2>
                         <p class="text-gray-400 mb-6">Enter your WhatsApp number to get a pairing code</p>
 
@@ -170,7 +199,7 @@
                                     (India)</p>
                             </div>
                             <button onclick="requestPairingCode()" id="pair-btn"
-                                class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105 text-lg">
+                                class="w-full btn-primary text-white font-bold py-4 px-6 rounded-xl text-lg">
                                 🔑 Get Pairing Code
                             </button>
                         </div>
@@ -225,187 +254,16 @@
                     </div>
                 </div>
 
-                <!-- Config Panel -->
-                <div id="config-panel" class="hidden glass-card rounded-3xl p-8">
-                    <h2 class="text-2xl font-semibold mb-6 text-center">⚙️ Bot Configuration</h2>
-
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-gray-400 mb-2">Bot Name</label>
-                            <input type="text" id="cfg-botname" placeholder="WASI BOT"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-2">Owner Number</label>
-                            <input type="text" id="cfg-owner" placeholder="923001234567"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-2">Prefix</label>
-                            <input type="text" id="cfg-prefix" placeholder="." maxlength="3"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-2">Session ID</label>
-                            <input type="text" id="cfg-sessionId" placeholder="wasi_session" onchange="loadConfig()"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-2">Mode</label>
-                            <select id="cfg-mode"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                                <option value="public" class="bg-gray-800">Public</option>
-                                <option value="private" class="bg-gray-800">Private</option>
-                            </select>
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-gray-400 mb-2">MongoDB URI (Optional)</label>
-                            <input type="text" id="cfg-mongodb" placeholder="mongodb+srv://..."
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div class="md:col-span-2">
-                            <label class="block text-gray-400 mb-2">Menu Image URL</label>
-                            <input type="text" id="cfg-menuImage" placeholder="https://..."
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-2">Time Zone</label>
-                            <input type="text" id="cfg-timeZone" placeholder="Asia/Karachi"
-                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-green-500 transition-all">
-                        </div>
-                    </div>
-
-                    <div class="grid md:grid-cols-2 gap-4 mt-6">
-                        <h3 class="md:col-span-2 text-xl font-semibold mb-2">Features</h3>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoReadMessages"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Auto Read Messages (Blue Ticks)</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoStatusSeen"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Auto Status Seen</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoStatusReact"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Auto React to Status (❤️)</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoStatusSave"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Auto Save Status (to Owner)</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoStatusMessage"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Auto Reply to Status</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoTyping"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Always Typing...</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoRecording"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Always Recording...</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-alwaysOnline"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">Always Online</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoWelcome"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">👋 Auto Welcome (Group)</span>
-                        </label>
-
-                        <label
-                            class="flex items-center space-x-3 bg-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/10 transition-all">
-                            <input type="checkbox" id="cfg-autoGoodbye"
-                                class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                            <span class="text-gray-300">👋 Auto Goodbye (Group)</span>
-                        </label>
-
-                        <input type="checkbox" id="cfg-autoReplyEnabled"
-                            class="form-checkbox h-5 w-5 text-green-500 rounded border-gray-600 bg-gray-700 focus:ring-offset-gray-900">
-                        <span class="text-gray-300">Enable Auto Replies</span>
-                        </label>
-                    </div>
-
-                    <!-- Welcome/Goodbye Custom Text -->
-                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-white/5 p-4 rounded-xl md:col-span-2">
-                            <label class="block text-gray-400 text-sm mb-2">✨ Auto Status Emojis (Comma
-                                separated)</label>
-                            <input type="text" id="cfg-autoStatusEmojis" placeholder="❤️,🧡,💛,💚,💙,💜,🌈,🔥"
-                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none">
-                            <p class="text-xs text-gray-500 mt-1">These emojis will be used randomly for status
-                                reactions.</p>
-                        </div>
-                        <div class="bg-white/5 p-4 rounded-xl">
-                            <label class="block text-gray-400 text-sm mb-2">👋 Welcome Message</label>
-                            <textarea id="cfg-welcomeMessage" rows="3"
-                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none"
-                                placeholder="Hello @user, Welcome to @group!"></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Use @user for mention, @group for group name</p>
-                        </div>
-                        <div class="bg-white/5 p-4 rounded-xl">
-                            <label class="block text-gray-400 text-sm mb-2">👋 Goodbye Message</label>
-                            <textarea id="cfg-goodbyeMessage" rows="3"
-                                class="w-full bg-gray-900/50 border border-gray-600 rounded-lg p-3 text-sm text-white focus:border-green-500 focus:outline-none"
-                                placeholder="@user Left the group."></textarea>
-                            <p class="text-xs text-gray-500 mt-1">Use @user for mention, @group for group name</p>
-                        </div>
-                    </div>
-
-                    <!-- Auto Replies Section -->
-                    <div class="mt-8 border-t border-white/10 pt-6">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xl font-semibold">🤖 Auto Replies</h3>
-                            <button onclick="addReplyField()"
-                                class="text-green-400 hover:text-green-300 text-sm font-semibold">+ Add Reply</button>
-                        </div>
-                        <div id="cfg-replies-container" class="space-y-3">
-                            <!-- Dynamic Reply Fields will populate here -->
-                        </div>
-                    </div>
-
-                    <div class="flex justify-center mt-8">
-                        <button onclick="saveConfig()"
-                            class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-3 px-8 rounded-xl transition-all">
-                            💾 Save Configuration
-                        </button>
-                    </div>
-                </div>
-
-                <!-- QR Code Panel (Optional) -->
+                <!-- QR Code Panel -->
                 <div id="qr-panel" class="hidden glass-card rounded-3xl p-8 glow-purple">
-                    <div class="text-center">
+                    <div class="text-center relative">
+                        <button onclick="goBack()"
+                            class="absolute left-0 top-0 text-gray-400 hover:text-white transition-colors">
+                            ← Back
+                        </button>
                         <div class="text-6xl mb-4">📱</div>
                         <h2 class="text-2xl font-semibold mb-2">Scan QR Code</h2>
-                        <p class="text-gray-400 mb-6">Alternative method - scan with WhatsApp</p>
+                        <p class="text-gray-400 mb-6">Scan with WhatsApp to connect</p>
 
                         <div id="qr-container"
                             class="bg-white rounded-2xl p-4 mb-6 inline-block min-w-[280px] min-h-[280px] flex items-center justify-center">
@@ -413,25 +271,33 @@
                                 <div
                                     class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent mx-auto mb-3">
                                 </div>
-                                <p class="text-gray-600 text-sm">Loading QR Code...</p>
+                                <p class="text-gray-600 text-sm">Generating QR Code...</p>
                             </div>
                             <img id="qr-image" src="" alt="QR Code" class="hidden max-w-full rounded-xl" />
                         </div>
 
-                        <p class="text-gray-500 text-sm">Open WhatsApp → Linked Devices → Link Device → Scan QR</p>
+                        <div class="bg-white/5 rounded-xl p-4 text-left max-w-md mx-auto">
+                            <p class="text-gray-300 font-semibold mb-3">📱 How to scan:</p>
+                            <ol class="space-y-2 text-gray-400 text-sm">
+                                <li>1. Open <span class="text-purple-400">WhatsApp</span> on your phone</li>
+                                <li>2. Go to <span class="text-purple-400">Settings → Linked Devices</span></li>
+                                <li>3. Tap <span class="text-purple-400">Link a Device</span></li>
+                                <li>4. Point your camera at this QR code</li>
+                            </ol>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Footer Cards -->
+            <!-- Info Cards -->
             <div class="grid md:grid-cols-2 gap-6 mt-8">
                 <div class="glass-card rounded-2xl p-6">
-                    <h3 class="text-lg font-semibold mb-3">🚀 Upcoming</h3>
-                    <div class="space-y-2 text-sm text-gray-300">
-                        <div>⏳ AI Chat (ChatGPT)</div>
-                        <div>⏳ YouTube Downloader</div>
-                        <div>⏳ Anti-Delete Messages</div>
-                    </div>
+                    <h3 class="text-lg font-semibold mb-3">⚙️ Configuration</h3>
+                    <p class="text-gray-400 text-sm">
+                        All bot settings are configured via environment variables.<br>
+                        Update your <span class="text-green-400">.env</span> file or Heroku Config Vars to customize the
+                        bot.
+                    </p>
                 </div>
                 <div class="glass-card rounded-2xl p-6">
                     <h3 class="text-lg font-semibold mb-3">📢 Join Channel</h3>
@@ -452,122 +318,29 @@
 
     <script>
         let lastQr = '';
-        let configMode = false;
+        let selectedMethod = null;
 
-        function enterConfigMode() {
-            configMode = true;
-            document.getElementById('connected-view').classList.add('hidden');
-            document.getElementById('setup-view').classList.remove('hidden');
-            showTab('config');
-        }
+        function selectMethod(method) {
+            selectedMethod = method;
+            document.getElementById('method-selection').classList.add('hidden');
 
-        function showTab(tab) {
-            document.getElementById('pair-panel').classList.toggle('hidden', tab !== 'pair');
-            document.getElementById('config-panel').classList.toggle('hidden', tab !== 'config');
-            document.getElementById('qr-panel').classList.toggle('hidden', tab !== 'qr');
-
-            ['pair', 'config', 'qr'].forEach(t => {
-                const btn = document.getElementById('tab-' + t);
-                btn.classList.toggle('tab-active', t === tab);
-                btn.classList.toggle('hover:bg-white/10', t !== tab);
-            });
-
-            if (tab === 'config') {
-                loadConfig();
-            }
-        }
-        // ... (skip other functions) ...
-        async function saveConfig() {
-            // ... (keep start of saveConfig) ...
-            const configData = {
-                botName: document.getElementById('cfg-botname').value,
-                ownerNumber: document.getElementById('cfg-owner').value,
-                prefix: document.getElementById('cfg-prefix').value,
-                mode: document.getElementById('cfg-mode').value,
-                mongoDbUrl: document.getElementById('cfg-mongodb').value,
-                menuImage: document.getElementById('cfg-menuImage').value,
-                timeZone: document.getElementById('cfg-timeZone').value,
-
-                autoReadMessages: document.getElementById('cfg-autoReadMessages').checked,
-                autoStatusSeen: document.getElementById('cfg-autoStatusSeen').checked,
-                autoStatusReact: document.getElementById('cfg-autoStatusReact').checked,
-                autoStatusMessage: document.getElementById('cfg-autoStatusMessage').checked,
-                autoTyping: document.getElementById('cfg-autoTyping').checked,
-                autoRecording: document.getElementById('cfg-autoRecording').checked,
-                alwaysOnline: document.getElementById('cfg-alwaysOnline').checked,
-                autoReplyEnabled: document.getElementById('cfg-autoReplyEnabled').checked,
-
-                autoReplies: getRepliesFromUI()
-            };
-
-            try {
-                const res = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(configData)
-                });
-
-                const data = await res.json();
-                if (data.success) {
-                    alert('Configuration saved! Bot is restarting to apply changes...');
-                    configMode = false; // Reset so connected view shows up on reconnect
-                } else {
-                    alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                console.error(e);
-                alert('Error saving configuration');
+            if (method === 'pair') {
+                document.getElementById('pair-panel').classList.remove('hidden');
+                document.getElementById('qr-panel').classList.add('hidden');
+            } else {
+                document.getElementById('qr-panel').classList.remove('hidden');
+                document.getElementById('pair-panel').classList.add('hidden');
+                // Request QR generation
+                fetch('/api/qr', { method: 'POST' }).catch(() => { });
             }
         }
 
-        async function checkStatus() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
-
-                const connStatus = document.getElementById('conn-status');
-                const dbStatus = document.getElementById('db-status');
-                const setupView = document.getElementById('setup-view');
-                const connectedView = document.getElementById('connected-view');
-
-                if (data.connected) {
-                    connStatus.textContent = 'Connected';
-                    connStatus.className = 'px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-400';
-
-                    if (!configMode) {
-                        setupView.classList.add('hidden');
-                        connectedView.classList.remove('hidden');
-                    }
-                } else {
-                    connStatus.textContent = 'Not Connected';
-                    connStatus.className = 'px-3 py-1 rounded-full text-sm bg-yellow-500/20 text-yellow-400';
-
-                    // Always show setup view if disconnected (to allow pairing)
-                    setupView.classList.remove('hidden');
-                    connectedView.classList.add('hidden');
-                    configMode = false; // Reset config mode if disconnected
-
-                    if (data.qr && data.qr !== lastQr) {
-                        lastQr = data.qr;
-                        const qrImage = document.getElementById('qr-image');
-                        qrImage.src = data.qr;
-                        qrImage.classList.remove('hidden');
-                        document.getElementById('qr-loading').classList.add('hidden');
-                    }
-                }
-
-                // Database Status
-                if (data.database) {
-                    dbStatus.textContent = 'Connected';
-                    dbStatus.className = 'px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-400';
-                } else {
-                    dbStatus.textContent = 'Disconnected';
-                    dbStatus.className = 'px-3 py-1 rounded-full text-sm bg-red-500/20 text-red-400';
-                }
-
-            } catch (e) {
-                console.error("Status check failed", e);
-            }
+        function goBack() {
+            document.getElementById('method-selection').classList.remove('hidden');
+            document.getElementById('pair-panel').classList.add('hidden');
+            document.getElementById('qr-panel').classList.add('hidden');
+            resetPairing();
+            selectedMethod = null;
         }
 
         function resetPairing() {
@@ -613,137 +386,9 @@
             }
         }
 
-        async function loadConfig() {
-            try {
-                const sessionId = document.getElementById('cfg-sessionId').value || '';
-                const res = await fetch(`/api/config?sessionId=${encodeURIComponent(sessionId)}`);
-                const data = await res.json();
-
-                // Text Inputs
-                document.getElementById('cfg-botname').value = data.botName || 'WASI BOT';
-                document.getElementById('cfg-owner').value = data.ownerNumber || '';
-                document.getElementById('cfg-prefix').value = data.prefix || '.';
-
-                document.getElementById('cfg-sessionId').value = data.sessionId || 'wasi_session';
-                document.getElementById('cfg-mode').value = data.mode || 'public';
-                document.getElementById('cfg-mongodb').value = data.mongoDbUrl || '';
-                document.getElementById('cfg-menuImage').value = data.menuImage || '';
-                document.getElementById('cfg-timeZone').value = data.timeZone || 'Asia/Karachi';
-
-                // Checkboxes
-                document.getElementById('cfg-autoReadMessages').checked = !!data.autoReadMessages;
-                document.getElementById('cfg-autoStatusSeen').checked = !!data.autoStatusSeen;
-                document.getElementById('cfg-autoStatusReact').checked = !!data.autoStatusReact;
-                document.getElementById('cfg-autoStatusSave').checked = !!data.autoStatusSave;
-                document.getElementById('cfg-autoStatusMessage').checked = !!data.autoStatusMessage;
-                document.getElementById('cfg-autoTyping').checked = !!data.autoTyping;
-                document.getElementById('cfg-autoRecording').checked = !!data.autoRecording;
-                document.getElementById('cfg-alwaysOnline').checked = !!data.alwaysOnline;
-                document.getElementById('cfg-autoWelcome').checked = !!data.autoWelcome;
-                document.getElementById('cfg-autoGoodbye').checked = !!data.autoGoodbye;
-                document.getElementById('cfg-autoReplyEnabled').checked = !!data.autoReplyEnabled;
-
-                document.getElementById('cfg-autoStatusEmojis').value = (data.autoStatusEmojis || []).join(',');
-
-                document.getElementById('cfg-welcomeMessage').value = data.welcomeMessage || "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT";
-                document.getElementById('cfg-goodbyeMessage').value = data.goodbyeMessage || "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT";
-
-                // Populate Auto Replies
-                const container = document.getElementById('cfg-replies-container');
-                container.innerHTML = ''; // Clear existing
-                if (data.autoReplies && Array.isArray(data.autoReplies)) {
-                    data.autoReplies.forEach(reply => addReplyField(reply.trigger, reply.reply));
-                }
-
-                // Show panels
-                document.getElementById('step-start').classList.add('hidden');
-                document.getElementById('config-panel').classList.remove('hidden');
-            } catch (e) {
-                console.error("Error loading config:", e);
-            }
-        }
-
-        function addReplyField(trigger = '', reply = '') {
-            const container = document.getElementById('cfg-replies-container');
-            const div = document.createElement('div');
-            div.className = 'grid grid-cols-12 gap-2 items-center';
-            div.innerHTML = `
-            <div class="col-span-4">
-                <input type="text" placeholder="Trigger (e.g. hi)" value="${trigger}"
-                    class="reply-trigger w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500">
-            </div>
-            <div class="col-span-7">
-                <input type="text" placeholder="Reply Message" value="${reply}"
-                    class="reply-msg w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500">
-            </div>
-            <div class="col-span-1 text-center">
-                <button onclick="this.parentElement.parentElement.remove()" class="text-red-400 hover:text-red-300">×</button>
-            </div>
-        `;
-            container.appendChild(div);
-        }
-
-        function getRepliesFromUI() {
-            const replyElements = document.querySelectorAll('#cfg-replies-container > div');
-            const autoReplies = [];
-            replyElements.forEach(el => {
-                const trigger = el.querySelector('.reply-trigger').value.trim();
-                const reply = el.querySelector('.reply-msg').value.trim();
-                if (trigger && reply) {
-                    autoReplies.push({ trigger, reply });
-                }
-            });
-            return autoReplies;
-        }
-
-        async function saveConfig() {
-            // Gather all config
-            const configData = {
-                botName: document.getElementById('cfg-botname').value,
-                ownerNumber: document.getElementById('cfg-owner').value,
-                prefix: document.getElementById('cfg-prefix').value,
-                sessionId: document.getElementById('cfg-sessionId').value,
-                mode: document.getElementById('cfg-mode').value,
-                mongoDbUrl: document.getElementById('cfg-mongodb').value,
-                menuImage: document.getElementById('cfg-menuImage').value,
-                timeZone: document.getElementById('cfg-timeZone').value,
-
-                autoReadMessages: document.getElementById('cfg-autoReadMessages').checked,
-                autoStatusSeen: document.getElementById('cfg-autoStatusSeen').checked,
-                autoStatusReact: document.getElementById('cfg-autoStatusReact').checked,
-                autoStatusSave: document.getElementById('cfg-autoStatusSave').checked,
-                autoStatusMessage: document.getElementById('cfg-autoStatusMessage').checked,
-                autoTyping: document.getElementById('cfg-autoTyping').checked,
-                autoRecording: document.getElementById('cfg-autoRecording').checked,
-                alwaysOnline: document.getElementById('cfg-alwaysOnline').checked,
-                autoReplyEnabled: document.getElementById('cfg-autoReplyEnabled').checked,
-                autoStatusEmojis: document.getElementById('cfg-autoStatusEmojis').value.split(',').map(e => e.trim()).filter(e => e.length > 0),
-
-                autoReplies: getRepliesFromUI()
-            };
-
-            try {
-                const res = await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(configData)
-                });
-
-                const data = await res.json();
-                if (data.success) {
-                    alert('Configuration saved! Bot is restarting to apply changes...');
-                } else {
-                    alert('Failed to save configuration: ' + (data.error || 'Unknown error'));
-                }
-            } catch (e) {
-                console.error(e);
-                alert('Error saving configuration');
-            }
-        }
         async function checkStatus() {
             try {
-                const sessionId = document.getElementById('cfg-sessionId').value || '';
-                const res = await fetch(`/api/status?sessionId=${encodeURIComponent(sessionId)}`);
+                const res = await fetch('/api/status');
                 const data = await res.json();
 
                 const connStatus = document.getElementById('conn-status');
@@ -754,28 +399,25 @@
                 if (data.connected) {
                     connStatus.textContent = 'Connected';
                     connStatus.className = 'px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-400';
-
-                    if (!configMode) {
-                        setupView.classList.add('hidden');
-                        connectedView.classList.remove('hidden');
-                    }
+                    setupView.classList.add('hidden');
+                    connectedView.classList.remove('hidden');
                 } else {
-                    connStatus.textContent = 'Not Connected';
+                    connStatus.textContent = 'Waiting...';
                     connStatus.className = 'px-3 py-1 rounded-full text-sm bg-yellow-500/20 text-yellow-400';
-
-                    // Always show setup view if disconnected (to allow pairing)
                     setupView.classList.remove('hidden');
                     connectedView.classList.add('hidden');
-                    configMode = false; // Reset config mode if disconnected
 
-                    if (data.qr && data.qr !== lastQr) {
+                    // Update QR if available and QR panel is visible
+                    if (data.qr && data.qr !== lastQr && selectedMethod === 'qr') {
                         lastQr = data.qr;
-                        document.getElementById('qr-image').src = data.qr;
-                        document.getElementById('qr-image').classList.remove('hidden');
+                        const qrImage = document.getElementById('qr-image');
+                        qrImage.src = data.qr;
+                        qrImage.classList.remove('hidden');
                         document.getElementById('qr-loading').classList.add('hidden');
                     }
                 }
 
+                // Database Status
                 if (data.database) {
                     dbStatus.textContent = 'Connected';
                     dbStatus.className = 'px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-400';
@@ -783,7 +425,9 @@
                     dbStatus.textContent = 'Disabled';
                     dbStatus.className = 'px-3 py-1 rounded-full text-sm bg-gray-500/20 text-gray-400';
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("Status check failed", e);
+            }
         }
 
         async function disconnect() {
@@ -796,9 +440,9 @@
             }
         }
 
-        loadConfig();
-        setInterval(checkStatus, 2000);
+        // Start status polling
         checkStatus();
+        setInterval(checkStatus, 2000);
     </script>
 </body>
 
