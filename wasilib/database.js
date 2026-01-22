@@ -281,7 +281,7 @@ async function wasi_isBgmEnabled(sessionId) {
     try {
         const Model = getModel(sessionId, 'BgmConfig');
         const conf = await Model.findOne({});
-        return conf ? conf.isEnabled : false;
+        return conf ? conf.isEnabled : true;
     } catch (e) {
         return false;
     }

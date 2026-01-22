@@ -566,9 +566,13 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         if (!wasi_msg.message) return;
 
         // EXTRACT ALL CONTEXT AT TOP
+        // CONTEXT PREPARATION
         const currentConfig = sessions.get(sessionId)?.config || initialConfig;
         const wasi_origin = wasi_msg.key.remoteJid;
         const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
+        const meJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+        const botJids = new Set([meJid, jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')].filter(Boolean));
+
         const wasi_text = wasi_msg.message.conversation ||
             wasi_msg.message.extendedTextMessage?.text ||
             wasi_msg.message.imageMessage?.caption ||
@@ -578,7 +582,6 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // 1. AVOID LOOPS & ALLOW SELF-COMMANDS
         if (wasi_msg.key.fromMe) {
             // Only continue if it's a command (starts with prefix)
-            // Or allow some specific non-command logic if needed
             const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
             if (!prefixes.some(p => wasi_text.trim().startsWith(p))) return;
         }
@@ -934,7 +937,7 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
         // MENTION REPLY Logic
         try {
-            const botJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+            const botJid = meJid;
             const botNum = botJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
             const ownerNumRaw = (currentConfig.ownerNumber || '').toString();

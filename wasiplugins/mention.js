@@ -16,7 +16,7 @@ module.exports = {
         // Case 1: Toggle On/Off
         if (wasi_args[0] === 'on' || wasi_args[0] === 'off') {
             const status = wasi_args[0] === 'on';
-            await wasi_toggleMention(config.sessionId, status);
+            await wasi_toggleMention(context.sessionId, status);
             return await wasi_sock.sendMessage(wasi_msg.key.remoteJid, { text: `✅ Mention Reply feature is now *${wasi_args[0].toUpperCase()}*` }, { quoted: wasi_msg });
         }
 
@@ -100,8 +100,8 @@ module.exports = {
             }, { quoted: wasi_msg });
         }
 
-        await wasi_setMention(config.sessionId, { type, content, mimetype });
-        await wasi_toggleMention(config.sessionId, true); // Auto-enable when set
+        await wasi_setMention(context.sessionId || sessionId, { type, content, mimetype });
+        await wasi_toggleMention(context.sessionId || sessionId, true); // Auto-enable when set
 
         if (type === 'text') {
             await wasi_sock.sendMessage(wasi_msg.key.remoteJid, { text: `✅ Mention Reply updated to text:\n\n"${content}"` }, { quoted: wasi_msg });
