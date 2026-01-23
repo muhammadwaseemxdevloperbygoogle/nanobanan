@@ -1,90 +1,61 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const axios = require('axios');
-const FormData = require('form-data');
+const { wasi_uploadToCatbox } = require('../wasilib/uploader');
 
 module.exports = {
     name: 'url',
     aliases: ['tourl', 'imgurl', 'upload'],
     category: 'Media',
-    desc: 'Upload image and get URL',
-    wasi_handler: async (wasi_sock, wasi_sender, context) => {
+    desc: 'Upload image/video and get URL',
+    wasi_handler: async (sock, from, context) => {
         const { wasi_msg } = context;
 
         // Check for quoted message or direct media
-        const quotedMsg = wasi_msg.message.extendedTextMessage?.contextInfo?.quotedMessage;
-        const mediaMsg = wasi_msg.message.imageMessage || quotedMsg?.imageMessage;
+        const contextInfo = wasi_msg.message?.extendedTextMessage?.contextInfo;
+        const quotedMsg = contextInfo?.quotedMessage;
 
-        if (!mediaMsg) {
-            return wasi_sock.sendMessage(wasi_sender, {
-                text: '❌ *Reply to an image to upload it!*\n\nUsage: Reply to an image with `.url`'
-            });
+        // Media detection (supports image, video, document)
+        const isQuoted = !!quotedMsg;
+        const msg = isQuoted ? quotedMsg : wasi_msg.message;
+
+        const isImage = msg.imageMessage || msg.viewOnceMessageV2?.message?.imageMessage || msg.viewOnceMessage?.message?.imageMessage;
+        const isVideo = msg.videoMessage || msg.viewOnceMessageV2?.message?.videoMessage || msg.viewOnceMessage?.message?.videoMessage;
+
+        if (!isImage && !isVideo) {
+            return await sock.sendMessage(from, {
+                text: '❌ *Reply to an image or video to upload it!*\n\nUsage: Reply to a media with `.url`'
+            }, { quoted: wasi_msg });
         }
 
         try {
-            await wasi_sock.sendMessage(wasi_sender, { text: '⏳ Uploading image...' });
-
-            // Get the actual message to download from
-            const msgToDownload = quotedMsg ?
-                { message: quotedMsg, key: wasi_msg.message.extendedTextMessage.contextInfo } :
-                wasi_msg;
+            await sock.sendMessage(from, { text: '⏳ Uploading to Catbox...' }, { quoted: wasi_msg });
 
             // Download media
             const buffer = await downloadMediaMessage(
-                msgToDownload,
+                { message: msg },
                 'buffer',
                 {},
                 {
-                    reuploadRequest: wasi_sock.updateMediaMessage
+                    logger: console,
+                    reuploadRequest: sock.updateMediaMessage
                 }
             );
 
-            // Try Telegraph first (most reliable)
-            let imageUrl;
-            try {
-                const form = new FormData();
-                form.append('file', buffer, { filename: 'image.jpg', contentType: 'image/jpeg' });
-
-                const response = await axios.post('https://telegra.ph/upload', form, {
-                    headers: form.getHeaders(),
-                    timeout: 30000
-                });
-
-                if (response.data && response.data[0]?.src) {
-                    imageUrl = 'https://telegra.ph' + response.data[0].src;
-                }
-            } catch (e) {
-                // Fallback to catbox.moe
-                try {
-                    const form = new FormData();
-                    form.append('reqtype', 'fileupload');
-                    form.append('fileToUpload', buffer, { filename: 'image.jpg', contentType: 'image/jpeg' });
-
-                    const response = await axios.post('https://catbox.moe/user/api.php', form, {
-                        headers: form.getHeaders(),
-                        timeout: 30000
-                    });
-
-                    if (response.data) {
-                        imageUrl = response.data;
-                    }
-                } catch (e2) {
-                    throw new Error('All upload services failed');
-                }
-            }
+            // Upload to Catbox
+            const imageUrl = await wasi_uploadToCatbox(buffer);
 
             if (!imageUrl) {
-                throw new Error('Failed to get URL');
+                throw new Error('Upload failed');
             }
 
-            await wasi_sock.sendMessage(wasi_sender, {
-                text: `✅ *Image Uploaded Successfully!*\n\n🔗 *URL:*\n${imageUrl}\n\n_Link will expire in a few days_`
-            });
+            await sock.sendMessage(from, {
+                text: `✅ *Uploaded Successfully!*\n\n🔗 *URL:*\n${imageUrl}\n\n_Powered by WASI BOT_`
+            }, { quoted: wasi_msg });
 
         } catch (error) {
-            console.error('URL error:', error);
-            await wasi_sock.sendMessage(wasi_sender, {
-                text: '❌ Failed to upload image. Please try again.'
-            });
+            console.error('URL command error:', error);
+            await sock.sendMessage(from, {
+                text: '❌ Failed to upload media. Catbox might be down or file is too large.'
+            }, { quoted: wasi_msg });
         }
     }
 };

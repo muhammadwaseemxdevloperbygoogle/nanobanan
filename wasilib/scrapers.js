@@ -351,11 +351,35 @@ async function wasi_capcut(url) {
     return { status: false, message: 'Failed to fetch CapCut video' };
 }
 
+/**
+ * Spotify Downloader
+ */
+async function wasi_spotify(url) {
+    try {
+        const apiUrl = `https://api.salmanahmad.tech/api/downloader/spotify?url=${encodeURIComponent(url)}`;
+        const data = await wasi_get(apiUrl);
+        if (data && data.status && data.data) {
+            return {
+                status: true,
+                provider: 'SalmanAhmad',
+                title: data.data.title,
+                artist: data.data.artist,
+                thumbnail: data.data.thumbnail,
+                downloadUrl: data.data.downloadUrl
+            };
+        }
+    } catch (e) {
+        console.error('Spotify Scraping Failed:', e.message);
+    }
+    return { status: false, message: 'Spotify scraping failed' };
+}
+
 module.exports = {
     wasi_tiktok,
     wasi_instagram,
     wasi_facebook,
     wasi_twitter,
     wasi_youtube,
-    wasi_capcut
+    wasi_capcut,
+    wasi_spotify
 };
