@@ -134,6 +134,10 @@
         "YT_USER_AGENT": {
             "description": "Browser User-Agent string (must match the one used to export cookies)",
             "required": false
+        },
+        "APIFY_TOKEN": {
+            "description": "Token for Apify Scraper",
+            "required": false
         }
     },
     "formation": {

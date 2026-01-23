@@ -1,7 +1,7 @@
-const { wasi_get, wasi_getBuffer } = require('./fetch');
+const { wasi_get, wasi_post, wasi_getBuffer } = require('./fetch');
 const instatouch = require('instatouch');
 const { instagramGetUrl } = require('instagram-url-direct');
-// const ytdl = require('@distube/ytdl-core'); // disabled to avoid ytdl-core errors
+const config = require('../wasi');
 const fbdl = require('fbdl-core');
 
 /**
@@ -144,7 +144,38 @@ async function wasi_instagram(url) {
  * Facebook Downloader
  */
 async function wasi_facebook(url) {
-    // Strategy 1: fbdl-core (Local Library)
+    // Strategy 1: Apify Facebook Posts Scraper (Premium Scraper)
+    try {
+        if (config.apifyToken) {
+            console.log('[FB] Trying Apify Scraper...');
+            const apifyUrl = `https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items?token=${config.apifyToken}`;
+            const input = {
+                "startUrls": [{ "url": url }],
+                "resultsLimit": 1,
+                "viewOption": "ADS_WASH",
+                "includeComments": false,
+                "proxyConfiguration": { "useApifyProxy": true }
+            };
+
+            const results = await wasi_post(apifyUrl, input);
+            if (results && results.length > 0) {
+                const item = results[0];
+                const videoUrl = item.videoUrl || (item.attachments && item.attachments.find(a => a.type === 'video')?.url);
+
+                if (videoUrl) {
+                    return {
+                        status: true,
+                        provider: 'Apify-Premium',
+                        sd: videoUrl,
+                        hd: videoUrl,
+                        title: item.message || 'Facebook Video'
+                    };
+                }
+            }
+        }
+    } catch (e) { console.error('Apify FB Failed:', e.message); }
+
+    // Strategy 2: fbdl-core (Local Library)
     try {
         console.log('[FB] Trying Local Library (fbdl-core)...');
         const data = await fbdl.getInfo(url);
