@@ -138,6 +138,18 @@
         "APIFY_TOKEN": {
             "description": "Token for Apify Scraper",
             "required": false
+        },
+        "CLOUDINARY_CLOUD_NAME": {
+            "description": "Cloudinary Cloud Name",
+            "required": false
+        },
+        "CLOUDINARY_API_KEY": {
+            "description": "Cloudinary API Key",
+            "required": false
+        },
+        "CLOUDINARY_API_SECRET": {
+            "description": "Cloudinary API Secret",
+            "required": false
         }
     },
     "formation": {

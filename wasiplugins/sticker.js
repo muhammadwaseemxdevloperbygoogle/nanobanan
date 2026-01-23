@@ -15,18 +15,38 @@ module.exports = {
         // Media detection
         const contextInfo = wasi_msg.message?.extendedTextMessage?.contextInfo;
         const quotedMsg = contextInfo?.quotedMessage;
-        const msg = quotedMsg || wasi_msg.message;
 
-        const isImage = msg?.imageMessage || msg?.viewOnceMessageV2?.message?.imageMessage || msg?.viewOnceMessage?.message?.imageMessage;
-        const isVideo = msg?.videoMessage || msg?.viewOnceMessageV2?.message?.videoMessage || msg?.viewOnceMessage?.message?.videoMessage;
+        let msg = null;
+        let msgType = null;
 
-        if (!isImage && !isVideo) {
+        if (wasi_msg.message?.imageMessage) {
+            msg = wasi_msg.message.imageMessage;
+            msgType = 'image';
+        } else if (wasi_msg.message?.videoMessage) {
+            msg = wasi_msg.message.videoMessage;
+            msgType = 'video';
+        } else if (quotedMsg?.imageMessage) {
+            msg = quotedMsg.imageMessage;
+            msgType = 'image';
+        } else if (quotedMsg?.videoMessage) {
+            msg = quotedMsg.videoMessage;
+            msgType = 'video';
+        } else if (quotedMsg?.viewOnceMessageV2?.message?.imageMessage || quotedMsg?.viewOnceMessage?.message?.imageMessage) {
+            msg = quotedMsg.viewOnceMessageV2?.message?.imageMessage || quotedMsg.viewOnceMessage?.message?.imageMessage;
+            msgType = 'image';
+        } else if (quotedMsg?.viewOnceMessageV2?.message?.videoMessage || quotedMsg?.viewOnceMessage?.message?.videoMessage) {
+            msg = quotedMsg.viewOnceMessageV2?.message?.videoMessage || quotedMsg.viewOnceMessage?.message?.videoMessage;
+            msgType = 'video';
+        }
+
+        if (!msg) {
             return await sock.sendMessage(from, {
-                text: '❌ *Reply to an image or video to create a sticker!*'
+                text: '❌ *Reply to an image or short video to create a sticker!*'
             }, { quoted: wasi_msg });
         }
 
         try {
+            console.log(`[Sticker] Processing ${msgType}...`);
             await sock.sendMessage(from, { text: '⏳ Creating sticker...' }, { quoted: wasi_msg });
 
             const buffer = await downloadMediaMessage(
@@ -46,7 +66,7 @@ module.exports = {
 
             let webpBuffer;
 
-            if (isImage) {
+            if (msgType === 'image') {
                 // Handle Image Sticker
                 webpBuffer = await sharp(buffer)
                     .resize(512, 512, {
@@ -57,10 +77,12 @@ module.exports = {
                     .toBuffer();
             } else {
                 // Handle Video/GIF Sticker (Requires FFmpeg)
-                const inputPath = path.join(__dirname, `../temp/input_${sessionId}_${Date.now()}.mp4`);
-                const outputPath = path.join(__dirname, `../temp/output_${sessionId}_${Date.now()}.webp`);
+                const tempDir = path.join(__dirname, '../temp');
+                if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
-                if (!fs.existsSync(path.join(__dirname, '../temp'))) fs.mkdirSync(path.join(__dirname, '../temp'));
+                const inputPath = path.join(tempDir, `input_${sessionId}_${Date.now()}.mp4`);
+                const outputPath = path.join(tempDir, `output_${sessionId}_${Date.now()}.webp`);
+
                 fs.writeFileSync(inputPath, buffer);
 
                 // Convert using FFmpeg
@@ -74,8 +96,10 @@ module.exports = {
                 webpBuffer = fs.readFileSync(outputPath);
 
                 // Cleanup
-                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+                try {
+                    if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+                } catch (e) { }
             }
 
             // Send Sticker

@@ -144,6 +144,22 @@ async function wasi_instagram(url) {
  * Facebook Downloader
  */
 async function wasi_facebook(url) {
+    // Strategy 0: Expand Short/Share URLs
+    try {
+        if (url.includes('share') || url.includes('fb.watch')) {
+            console.log('[FB] Expanding short URL...');
+            const axios = require('axios');
+            const response = await axios.get(url, {
+                maxRedirects: 5,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+            url = response.request.res.responseUrl || url;
+            console.log('[FB] Resolved URL:', url);
+        }
+    } catch (e) {
+        console.error('[FB] URL Expansion Failed:', e.message);
+    }
+
     // Strategy 1: Apify Facebook Posts Scraper (Premium Scraper)
     try {
         if (config.apifyToken) {

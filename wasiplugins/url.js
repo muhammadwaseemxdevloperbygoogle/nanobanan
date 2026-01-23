@@ -1,5 +1,6 @@
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
-const { wasi_uploadToCatbox } = require('../wasilib/uploader');
+const { wasi_uploadToCatbox, wasi_uploadToCloudinary } = require('../wasilib/uploader');
+const config = require('../wasi');
 
 module.exports = {
     name: 'url',
@@ -27,7 +28,7 @@ module.exports = {
         }
 
         try {
-            await sock.sendMessage(from, { text: '⏳ Uploading to Catbox...' }, { quoted: wasi_msg });
+            await sock.sendMessage(from, { text: '⏳ Uploading to server...' }, { quoted: wasi_msg });
 
             // Download media
             const buffer = await downloadMediaMessage(
@@ -40,11 +41,21 @@ module.exports = {
                 }
             );
 
-            // Upload to Catbox
-            const imageUrl = await wasi_uploadToCatbox(buffer);
+            // Upload Strategy: Cloudinary (If Configured) -> Catbox
+            let imageUrl = null;
+
+            if (config.cloudinaryCloudName) {
+                console.log('[URL] Trying Cloudinary...');
+                imageUrl = await wasi_uploadToCloudinary(buffer);
+            }
 
             if (!imageUrl) {
-                throw new Error('Upload failed');
+                console.log('[URL] Falling back to Catbox...');
+                imageUrl = await wasi_uploadToCatbox(buffer);
+            }
+
+            if (!imageUrl) {
+                throw new Error('All upload services failed');
             }
 
             await sock.sendMessage(from, {
