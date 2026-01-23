@@ -614,6 +614,10 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     if (groupSettings && groupSettings.antidelete) {
                         const destination = groupSettings.antideleteDestination || 'group';
                         const deleterJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
+
+                        // Ignore if the bot itself deleted the message
+                        if (botJids.has(jidNormalizedUser(deleterJid))) return;
+
                         const deleterNum = deleterJid.split('@')[0].split(':')[0];
                         const originalSender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
                         const originalNum = originalSender.split('@')[0].split(':')[0];
@@ -1014,6 +1018,39 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
             // Return early for status messages (don't process as commands)
             return;
+        }
+
+        // -------------------------------------------------------------------------
+        // MENTION REPLY LOGIC
+        // -------------------------------------------------------------------------
+        try {
+            const { wasi_isMentionEnabled, wasi_getMention } = require('./wasilib/database');
+            const isMentionEnabled = await wasi_isMentionEnabled(sessionId);
+
+            if (isMentionEnabled) {
+                const mentions = wasi_msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                const isMentioned = mentions.includes(meJid);
+
+                if (isMentioned) {
+                    const mentionData = await wasi_getMention(sessionId);
+                    if (mentionData && mentionData.content) {
+                        const { type, content, mimetype } = mentionData;
+                        console.log(`🔔 Mention detected! Replying with ${type}...`);
+
+                        if (type === 'text') {
+                            await wasi_sock.sendMessage(wasi_origin, { text: content }, { quoted: wasi_msg });
+                        } else if (type === 'audio') {
+                            await wasi_sock.sendMessage(wasi_origin, { audio: { url: content }, mimetype: mimetype || 'audio/mp4', ptt: true }, { quoted: wasi_msg });
+                        } else if (type === 'image') {
+                            await wasi_sock.sendMessage(wasi_origin, { image: { url: content }, caption: '> Powered by WASI BOT' }, { quoted: wasi_msg });
+                        } else if (type === 'video') {
+                            await wasi_sock.sendMessage(wasi_origin, { video: { url: content }, caption: '> Powered by WASI BOT' }, { quoted: wasi_msg });
+                        }
+                    }
+                }
+            }
+        } catch (mentionErr) {
+            console.error('Mention Reply Logic Error:', mentionErr);
         }
 
 
