@@ -249,61 +249,85 @@ async function wasi_twitter(url) {
 }
 
 /**
- * YouTube Downloader
+ * YouTube Downloader with Fallback Strategy
+ * @param {string} url - The YouTube URL
+ * @param {string} type - 'video' or 'audio'
  */
-async function wasi_youtube(url) {
-    // Strategy 1: @distube/ytdl-core (Local Library)
+async function wasi_youtube(url, type = 'video') {
+    // Strategy 1: Vreden API
     try {
-        console.log('[YT] Trying Local Library (ytdl)...');
-        const info = await ytdl.getInfo(url);
-        const format = ytdl.chooseFormat(info.formats, { quality: 'highestvideo', filter: 'videoandaudio' });
-        if (format && format.url) {
-            return {
-                status: true,
-                type: 'video',
-                provider: '@distube/ytdl-core',
-                title: info.videoDetails.title,
-                thumbnail: info.videoDetails.thumbnails[0].url,
-                downloadUrl: format.url
-            };
-        }
-    } catch (e) { console.error('ytdl-core Failed:', e.message); }
-
-    // Strategy 2: Vreden v1 (Video)
-    try {
-        console.log('[YT] Trying Vreden API...');
-        const apiUrl = `https://api.vreden.my.id/api/v1/download/youtube/video?url=${encodeURIComponent(url)}&quality=720`;
+        console.log(`[YT Scraping] Trying Vreden (${type})...`);
+        const endpoint = type === 'audio' ? 'mp3' : 'video';
+        const apiUrl = `https://api.vreden.my.id/api/v1/download/youtube/${endpoint}?url=${encodeURIComponent(url)}`;
         const data = await wasi_get(apiUrl);
         if (data && data.status && data.result) {
             return {
                 status: true,
-                type: 'video',
-                provider: 'Vreden-v1',
+                type: type,
+                provider: 'Vreden',
                 title: data.result.title,
                 thumbnail: data.result.thumbnail,
                 downloadUrl: data.result.downloadUrl
             };
         }
-    } catch (e) { console.error('Vreden-v1 YT Failed:', e.message); }
+    } catch (e) { }
 
-    // Strategy 3: Siputzx
+    // Strategy 2: Siputzx API
     try {
-        console.log('[YT] Trying Siputzx API...');
-        const apiUrl = `https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(url)}`;
+        console.log(`[YT Scraping] Trying Siputzx (${type})...`);
+        const endpoint = type === 'audio' ? 'ytmp3' : 'ytmp4';
+        const apiUrl = `https://api.siputzx.my.id/api/d/${endpoint}?url=${encodeURIComponent(url)}`;
         const data = await wasi_get(apiUrl);
         if (data && data.status && data.data) {
             return {
                 status: true,
-                type: 'video',
+                type: type,
                 provider: 'Siputzx',
                 title: data.data.title,
                 thumbnail: data.data.thumbnail,
                 downloadUrl: data.data.dl
             };
         }
-    } catch (e) { console.error('Siputzx YT Failed:', e.message); }
+    } catch (e) { }
 
-    return { status: false, message: 'All YouTube providers failed' };
+    // Strategy 3: BK9 API
+    try {
+        console.log(`[YT Scraping] Trying BK9 (${type})...`);
+        const endpoint = type === 'audio' ? 'audio' : 'video';
+        const apiUrl = `https://bk9.fun/download/youtube?url=${encodeURIComponent(url)}`;
+        const data = await wasi_get(apiUrl);
+        if (data && data.status && data.BK9) {
+            const res = data.BK9;
+            return {
+                status: true,
+                type: type,
+                provider: 'BK9',
+                title: res.title,
+                thumbnail: res.thumbnail,
+                downloadUrl: type === 'audio' ? res.audio[0].url : res.video[0].url
+            };
+        }
+    } catch (e) { }
+
+    // Strategy 4: RyzenDesu API
+    try {
+        console.log(`[YT Scraping] Trying RyzenDesu (${type})...`);
+        const apiUrl = `https://api.ryzendesu.vip/api/downloader/ytdl?url=${encodeURIComponent(url)}`;
+        const data = await wasi_get(apiUrl);
+        if (data && data.data) {
+            const res = data.data;
+            return {
+                status: true,
+                type: type,
+                provider: 'RyzenDesu',
+                title: res.title,
+                thumbnail: res.thumbnail,
+                downloadUrl: type === 'audio' ? res.mp3 : res.mp4
+            };
+        }
+    } catch (e) { }
+
+    return { status: false, message: 'All YouTube scraping strategies failed' };
 }
 
 /**

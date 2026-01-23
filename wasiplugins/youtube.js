@@ -41,22 +41,45 @@ module.exports = {
                 url = search.videos[0].url;
             }
 
+            // --- STRATEGY 1: External Scrapers (Best for Heroku) ---
+            const { wasi_youtube } = require('../wasilib/scrapers');
+            console.log(`[YT] Trying External Scrapers for ${url}...`);
+            const scrapResult = await wasi_youtube(url, isAudio ? 'audio' : 'video');
+
+            if (scrapResult.status && scrapResult.downloadUrl) {
+                console.log(`[YT] Scraper Success (${scrapResult.provider})`);
+                const { wasi_getBuffer } = require('../wasilib/fetch');
+                const buffer = await wasi_getBuffer(scrapResult.downloadUrl);
+
+                if (isAudio) {
+                    return await wasi_sock.sendMessage(wasi_sender, {
+                        audio: buffer,
+                        mimetype: 'audio/mpeg',
+                        ptt: false
+                    }, { quoted: wasi_msg });
+                } else {
+                    return await wasi_sock.sendMessage(wasi_sender, {
+                        video: buffer,
+                        caption: `🎥 *YOUTUBE DOWNLOADER*\n\n📌 *Title:* ${scrapResult.title}\n🚀 *Provider:* ${scrapResult.provider}\n\n> WASI-MD-V7`
+                    }, { quoted: wasi_msg });
+                }
+            }
+
+            // --- STRATEGY 2: Local yt-dlp (Fallback) ---
+            console.log(`[YT] Scrapers failed or returned no URL. Trying Local yt-dlp fallback...`);
+
             // Handle Cookies for Heroku/IP Blocks
             if (context.config?.ytCookies) {
-                // If it's a path that exists
                 if (fs.existsSync(context.config.ytCookies)) {
                     cookiesFile = context.config.ytCookies;
                 }
-                // If it looks like cookie content (Netscape format)
                 else if (context.config.ytCookies.includes('Netscape') || context.config.ytCookies.includes('google.com')) {
                     cookiesFile = path.join(tempDir, `cookies_${sessionId}_${Date.now()}.txt`);
                     let content = context.config.ytCookies.trim();
-                    // Ensure mandatory header mentioned in docs
                     if (!content.includes('# Netscape HTTP Cookie File')) {
                         content = '# Netscape HTTP Cookie File\n' + content;
                     }
                     fs.writeFileSync(cookiesFile, content);
-                    console.log(`[YT-DLP] Created temporary cookies file: ${cookiesFile}`);
                 }
             }
 
@@ -66,9 +89,9 @@ module.exports = {
                 noWarnings: true,
                 addHeader: [
                     'referer:youtube.com',
-                    `user-agent:${context.config?.ytUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}`
+                    `user-agent:${context.config?.ytUserAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}`
                 ],
-                userAgent: context.config?.ytUserAgent || undefined, // Also pass directly
+                userAgent: context.config?.ytUserAgent || undefined,
                 ffmpegLocation: ffmpegPath || undefined,
                 cookies: cookiesFile || undefined
             };
@@ -82,32 +105,26 @@ module.exports = {
                 options.mergeOutputFormat = 'mp4';
             }
 
-            console.log(`[YT-DLP] Downloading: ${url} (Cookies: ${!!cookiesFile})`);
-
-            await ytDlp(url, options);
+            try {
+                await ytDlp(url, options);
+            } catch (dlError) {
+                throw new Error(`Download failed: ${dlError.message || 'Check logs'}`);
+            }
 
             if (fs.existsSync(tempFile)) {
                 const stats = fs.statSync(tempFile);
-                const fileSizeInMB = stats.size / (1024 * 1024);
-
-                if (fileSizeInMB > 100) {
+                if (stats.size / (1024 * 1024) > 100) {
                     return await wasi_sock.sendMessage(wasi_sender, { text: '❌ The file is too large to send (>100MB).' });
                 }
 
+                const buffer = fs.readFileSync(tempFile);
                 if (isAudio) {
-                    await wasi_sock.sendMessage(wasi_sender, {
-                        audio: fs.readFileSync(tempFile),
-                        mimetype: 'audio/mpeg',
-                        ptt: false
-                    }, { quoted: wasi_msg });
+                    await wasi_sock.sendMessage(wasi_sender, { audio: buffer, mimetype: 'audio/mpeg', ptt: false }, { quoted: wasi_msg });
                 } else {
-                    await wasi_sock.sendMessage(wasi_sender, {
-                        video: fs.readFileSync(tempFile),
-                        caption: `🎥 *YOUTUBE DOWNLOADER*\n\n> WASI-MD-V7`
-                    }, { quoted: wasi_msg });
+                    await wasi_sock.sendMessage(wasi_sender, { video: buffer, caption: `🎥 *YOUTUBE DOWNLOADER*\n\n> WASI-MD-V7` }, { quoted: wasi_msg });
                 }
             } else {
-                throw new Error('yt-dlp completed but output file was not found.');
+                throw new Error('Fallback yt-dlp failed.');
             }
 
         } catch (e) {
