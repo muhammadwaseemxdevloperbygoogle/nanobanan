@@ -5,7 +5,7 @@ module.exports = {
     category: 'Settings',
     desc: 'Toggle Auto View Once Conversion on/off',
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { wasi_args, sessionId } = context;
+        const { wasi_args, sessionId, config } = context;
 
         try {
             if (!wasi_args || wasi_args.length === 0) {
@@ -19,18 +19,25 @@ module.exports = {
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Usage: .autovv on/off' });
             }
 
-            // Get current settings using correct arguments (sessionId, jid)
+            // Target the OWNER defined in config, not necessarily the sender
+            // This ensures index.js (which looks for owner settings) finds this update.
+            const ownerNum = (config.ownerNumber || '').replace(/\D/g, '');
+            if (!ownerNum) {
+                return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Owner number not configured in bot settings.' });
+            }
+            const targetJid = ownerNum + '@s.whatsapp.net';
+
             const { wasi_getUserAutoStatus, wasi_setUserAutoStatus } = require('../wasilib/database');
-            let settings = await wasi_getUserAutoStatus(sessionId, wasi_sender) || {};
+            let settings = await wasi_getUserAutoStatus(sessionId, targetJid) || {};
 
             // Update
-            settings.jid = wasi_sender; // Ensure JID is set
+            settings.jid = targetJid;
             settings.autoViewOnce = status;
 
             // Save
-            await wasi_setUserAutoStatus(sessionId, wasi_sender, settings);
+            await wasi_setUserAutoStatus(sessionId, targetJid, settings);
 
-            await wasi_sock.sendMessage(wasi_sender, { text: `✅ Auto View Once has been turned *${status ? 'ON' : 'OFF'}* for you.` });
+            await wasi_sock.sendMessage(wasi_sender, { text: `✅ Auto View Once has been turned *${status ? 'ON' : 'OFF'}* for the Owner.\n\n(Target: ${ownerNum})` });
 
         } catch (e) {
             console.error('AutoVV Error:', e);
