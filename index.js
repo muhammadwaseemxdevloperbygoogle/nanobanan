@@ -801,14 +801,13 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                             if (!isSenderAdmin) {
                                 // Bot admin check
                                 const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
-                                const botJidsLocal = new Set([
-                                    jidNormalizedUser(me?.id),
-                                    jidNormalizedUser(me?.jid),
-                                    jidNormalizedUser(me?.lid)
-                                ].filter(Boolean));
+                                const myJid = jidNormalizedUser(me?.id || me?.jid);
 
-                                const botMod = participants.find(p => botJidsLocal.has(jidNormalizedUser(p.id)));
+                                const botMod = participants.find(p => jidNormalizedUser(p.id) === myJid);
                                 const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
+
+                                // Debug Log for Admin Check
+                                // console.log(`[Antilink] BotJid: ${myJid} | Found: ${!!botMod} | Admin: ${botMod?.admin} | Result: ${isBotAdmin}`);
 
                                 const mode = groupSettings.antilinkMode || 'delete';
                                 const maxWarnings = groupSettings.antilinkMaxWarnings || 3;

@@ -5,12 +5,15 @@ const { Welcomer, Leaver } = require('canvacord');
 async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
     const { id, participants, action } = update;
 
-    // console.log('Group Event:', action, id);
+    console.log(`[GroupEvents] Update in ${id}: ${action} for ${participants.length} participants`);
 
     try {
         // 1. Get Group Metadata (for name and member count)
         const metadata = await sock.groupMetadata(id).catch(() => null);
-        if (!metadata) return;
+        if (!metadata) {
+            console.log('[GroupEvents] Failed to fetch group metadata. Aborting.');
+            return;
+        }
 
         const groupName = metadata.subject;
         const memberCount = metadata.participants.length;
@@ -18,12 +21,12 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
         // 2. Get Group Specific Settings
         const settings = await wasi_getGroupSettings(sessionId, id);
 
-        // Determine if we should act (Group Settings take precedence, fallback to global config if group setting is undefined? 
-        // Usually turned off by default in DB schema, so if not explicitly enabled in Group, check global? 
-        // For now, let's treat Group Settings as the source of truth. If specific toggle is ON, do it.)
+        // Determine if we should act
+        const doWelcome = settings?.welcome || (config.autoWelcome && !settings?.welcome === false);
+        const doGoodbye = settings?.goodbye || (config.autoGoodbye && !settings?.goodbye === false);
 
-        const doWelcome = settings?.welcome || (config.autoWelcome && !settings);
-        const doGoodbye = settings?.goodbye || (config.autoGoodbye && !settings);
+        // Debug Log
+        // console.log(`[GroupEvents] Welcome: ${doWelcome}, Goodbye: ${doGoodbye} (Source: ${settings ? 'Group' : 'Global'})`);
 
         if (!doWelcome && !doGoodbye) return;
 
@@ -38,9 +41,11 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
             } catch { }
 
             if (action === 'add' && doWelcome) {
+                console.log(`[GroupEvents] Processing WELCOME for ${participant}`);
                 // --- WELCOME ---
                 let buffer;
                 try {
+                    console.log('[GroupEvents] Generating Welcome Card...');
                     const card = new Welcomer()
                         .setUsername(userName)
                         .setDiscriminator('0000')
@@ -57,7 +62,7 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
 
                     buffer = await card.build();
                 } catch (e) {
-                    console.error('Welcome Card Error:', e);
+                    console.error('[GroupEvents] Welcome Card Gen Failed:', e.message);
                 }
 
                 let text = settings?.welcomeMessage || config.welcomeMessage || "Hello @user, Welcome to @group! 👋";
@@ -70,6 +75,7 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
                         mentions: [participant]
                     });
                 } else {
+                    console.log('[GroupEvents] Sending Text Fallback for Welcome');
                     await sock.sendMessage(id, {
                         text: text,
                         mentions: [participant]
@@ -77,9 +83,11 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
                 }
 
             } else if (action === 'remove' && doGoodbye) {
+                console.log(`[GroupEvents] Processing GOODBYE for ${participant}`);
                 // --- GOODBYE ---
                 let buffer;
                 try {
+                    console.log('[GroupEvents] Generating Goodbye Card...');
                     const card = new Leaver()
                         .setUsername(userName)
                         .setDiscriminator('0000')
@@ -96,7 +104,7 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
 
                     buffer = await card.build();
                 } catch (e) {
-                    console.error('Goodbye Card Error:', e);
+                    console.error('[GroupEvents] Goodbye Card Gen Failed:', e.message);
                 }
 
                 let text = settings?.goodbyeMessage || config.goodbyeMessage || "@user Left the group. 👋";
@@ -109,6 +117,7 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
                         mentions: [participant]
                     });
                 } else {
+                    console.log('[GroupEvents] Sending Text Fallback for Goodbye');
                     await sock.sendMessage(id, {
                         text: text,
                         mentions: [participant]
@@ -117,7 +126,7 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
             }
         }
     } catch (err) {
-        console.error('Error handling group update:', err.message);
+        console.error('[GroupEvents] Error handling group update:', err.message);
     }
 }
 

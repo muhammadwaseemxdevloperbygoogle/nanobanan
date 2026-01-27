@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const ffmpeg = require('../wasilib/ffmpeg'); // Use our configured ffmpeg
 
 module.exports = {
     name: 'convert',
@@ -53,23 +55,21 @@ module.exports = {
         fs.writeFileSync(inputPath, buffer);
 
         // 3. Execution Helpers
-        const runFfmpeg = (command) => {
-            return new Promise((resolve, reject) => {
-                exec(command, (error) => {
-                    if (error) reject(error);
-                    else resolve();
-                });
-            });
-        };
-
         try {
             // --- VIDEO/AUDIO TO MP3 ---
             if (cmd === 'tomp3' || cmd === 'mp3') {
                 if (targetType !== 'video' && targetType !== 'audio') {
                     throw new Error('Only Video or Audio can be converted to MP3.');
                 }
-                // Convert to mp3
-                await runFfmpeg(`ffmpeg -i "${inputPath}" -vn -ar 44100 -ac 2 -b:a 192k "${outputPath}.mp3"`);
+
+                await new Promise((resolve, reject) => {
+                    ffmpeg(inputPath)
+                        .toFormat('mp3')
+                        .audioBitrate('192k')
+                        .on('error', reject)
+                        .on('end', resolve)
+                        .save(outputPath + '.mp3');
+                });
 
                 const buff = fs.readFileSync(outputPath + '.mp3');
                 await sock.sendMessage(from, {
@@ -85,8 +85,14 @@ module.exports = {
                 if (targetType !== 'sticker') {
                     throw new Error('Only Stickers can be converted to Image.');
                 }
-                // Convert sticker (webp) to png
-                await runFfmpeg(`ffmpeg -i "${inputPath}" "${outputPath}.png"`);
+
+                await new Promise((resolve, reject) => {
+                    ffmpeg(inputPath)
+                        .toFormat('png')
+                        .on('error', reject)
+                        .on('end', resolve)
+                        .save(outputPath + '.png');
+                });
 
                 const buff = fs.readFileSync(outputPath + '.png');
                 await sock.sendMessage(from, {
@@ -98,9 +104,25 @@ module.exports = {
             // --- IMAGE/VIDEO TO STICKER ---
             else if (cmd === 'tosticker' || cmd === 's') {
                 if (targetType === 'image' || targetType === 'video') {
-                    // Using built-in sticker logic would be cleaner, but user asked for converter commands.
-                    // A simple ffmpeg sticker: center crop and resize to 512x512
-                    await runFfmpeg(`ffmpeg -i "${inputPath}" -vf "scale=512:512:force_original_aspect_ratio=increase,crop=512:512,setsar=1" "${outputPath}.webp"`);
+
+                    await new Promise((resolve, reject) => {
+                        ffmpeg(inputPath)
+                            .outputOptions([
+                                "-vcodec libwebp",
+                                "-vf scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000,setsar=1",
+                                "-loop 0",
+                                "-ss 00:00:00.0",
+                                "-t 00:00:10.0",
+                                "-preset default",
+                                "-an",
+                                "-vsync 0",
+                                "-s 512:512"
+                            ])
+                            .toFormat('webp')
+                            .on('error', reject)
+                            .on('end', resolve)
+                            .save(outputPath + '.webp');
+                    });
 
                     const buff = fs.readFileSync(outputPath + '.webp');
                     await sock.sendMessage(from, { sticker: buff }, { quoted: wasi_msg });
@@ -113,7 +135,14 @@ module.exports = {
                 // Determine based on content if just 'convert'
                 if ((targetType === 'video' || targetType === 'audio')) {
                     // Default to mp3
-                    await runFfmpeg(`ffmpeg -i "${inputPath}" -vn -ar 44100 -ac 2 -b:a 192k "${outputPath}.mp3"`);
+                    await new Promise((resolve, reject) => {
+                        ffmpeg(inputPath)
+                            .toFormat('mp3')
+                            .audioBitrate('192k')
+                            .on('error', reject)
+                            .on('end', resolve)
+                            .save(outputPath + '.mp3');
+                    });
                     const buff = fs.readFileSync(outputPath + '.mp3');
                     await sock.sendMessage(from, { audio: buff, mimetype: 'audio/mpeg', ptt: false }, { quoted: wasi_msg });
                 }

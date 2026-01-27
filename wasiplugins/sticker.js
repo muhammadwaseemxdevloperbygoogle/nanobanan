@@ -2,7 +2,7 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const ffmpeg = require('../wasilib/ffmpeg');
 
 module.exports = {
     name: 'sticker',
@@ -36,16 +36,30 @@ module.exports = {
         try {
             await sock.sendMessage(from, { text: '⏳ Creating sticker...' }, { quoted: wasi_msg });
 
+            console.log(`[Sticker] Downloading media... (Image: ${isImage}, Video: ${isVideo})`);
+
             // Download media - We MUST pass the container that has the [type]Message key
+            // Construct a fake message object for downloadMediaMessage if working with quoted
+            const msgToDownload = isQuoted ? { message: targetMsg } : wasi_msg;
+
+            // Clean up the object structure for downloadMediaMessage to avoid errors
+            // It expects { message: { ... } }
+            const downloadPayload = {
+                message: targetMsg.imageMessage ? { imageMessage: targetMsg.imageMessage } :
+                    targetMsg.videoMessage ? { videoMessage: targetMsg.videoMessage } : targetMsg
+            };
+
             const buffer = await downloadMediaMessage(
-                { message: targetMsg },
+                downloadPayload,
                 'buffer',
                 {},
                 {
                     logger: console,
-                    reuploadRequest: sock.updateMediaMessage
+                    // reuploadRequest: sock.updateMediaMessage // removed to avoid potential issues if not needed
                 }
             );
+
+            console.log(`[Sticker] Media downloaded. Size: ${buffer.length}`);
 
             // Parse sticker metadata
             const fullArgs = wasi_args.join(' ');
@@ -55,6 +69,7 @@ module.exports = {
             let webpBuffer;
 
             if (isImage) {
+                console.log('[Sticker] Processing Image with Sharp...');
                 // Image Sticker
                 webpBuffer = await sharp(buffer)
                     .resize(512, 512, {
@@ -64,6 +79,7 @@ module.exports = {
                     .webp({ quality: 80 })
                     .toBuffer();
             } else {
+                console.log('[Sticker] Processing Video with FFMPEG...');
                 // Video Sticker
                 const tempDir = path.join(__dirname, '../temp');
                 if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
@@ -74,14 +90,33 @@ module.exports = {
                 fs.writeFileSync(inputPath, buffer);
 
                 await new Promise((resolve, reject) => {
-                    // Optimized FFmpeg command for WhatsApp animated stickers
-                    exec(`ffmpeg -i "${inputPath}" -vcodec libwebp -filter_complex "[0:v] fps=15,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" -loop 0 -preset default -an -vsync 0 -s 512:512 "${outputPath}"`, (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
+                    ffmpeg(inputPath)
+                        .outputOptions([
+                            "-vcodec libwebp",
+                            "-filter_complex [0:v] fps=15,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000",
+                            "-loop 0",
+                            "-preset default",
+                            "-an",
+                            "-vsync 0",
+                            "-s 512:512"
+                        ])
+                        .toFormat('webp')
+                        .on('error', (e) => {
+                            console.error('[Sticker] FFMPEG Error:', e);
+                            reject(e);
+                        })
+                        .on('end', () => {
+                            console.log('[Sticker] FFMPEG conversion complete.');
+                            resolve();
+                        })
+                        .save(outputPath);
                 });
 
-                webpBuffer = fs.readFileSync(outputPath);
+                if (fs.existsSync(outputPath)) {
+                    webpBuffer = fs.readFileSync(outputPath);
+                } else {
+                    throw new Error('FFMPEG failed to generate output file.');
+                }
 
                 // Cleanup
                 try {
@@ -89,6 +124,8 @@ module.exports = {
                     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
                 } catch (e) { }
             }
+
+            console.log(`[Sticker] Sending sticker (${webpBuffer.length} bytes)...`);
 
             // Send Sticker
             await sock.sendMessage(from, {
@@ -100,7 +137,7 @@ module.exports = {
         } catch (error) {
             console.error('Sticker Error:', error);
             await sock.sendMessage(from, {
-                text: '❌ Failed to create sticker. Ensure you are replying to a supported image/video.'
+                text: `❌ Error creating sticker: ${error.message}`
             }, { quoted: wasi_msg });
         }
     }
