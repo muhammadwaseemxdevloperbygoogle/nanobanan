@@ -72,7 +72,8 @@ const wasi_botConfigSchema = new mongoose.Schema({
     autoStatusSeen: { type: Boolean, default: true },
     autoStatusReact: { type: Boolean, default: true },
     autoStatusSave: { type: Boolean, default: false },
-    autoStatusEmojis: { type: [String], default: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥'] }
+    autoStatusEmojis: { type: [String], default: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🌈', '🔥'] },
+    levelup: { type: Boolean, default: true }
 });
 
 const wasi_groupSettingsSchema = new mongoose.Schema({

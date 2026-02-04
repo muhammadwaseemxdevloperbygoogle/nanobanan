@@ -4,7 +4,7 @@ module.exports = {
     name: 'settings',
     aliases: ['settings', 'set', 'mi', 'config'],
     category: 'Settings',
-    desc: 'Update bot settings from chat.\nUsage:\n.mi <url> (Set Menu Image)\n.set <key> <value>\nKeys: prefix, owner, welcome, goodbye, autoview, autoread',
+    desc: 'Update bot settings from chat.\nUsage:\n.mi <url> (Set Menu Image)\n.set <key> <value>\nKeys: prefix, owner, welcome, goodbye, autoread, rank',
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
         const { wasi_args, sessionId, wasi_msg, wasi_text } = context;
 
@@ -54,7 +54,7 @@ module.exports = {
         // Generic .set logic
         if (wasi_args.length < 2) {
             return await wasi_sock.sendMessage(wasi_sender, {
-                text: '*⚙️ Settings Manager*\n\nUsage: .set <key> <value>\n\n*Keys:*\n- prefix\n- owner\n- welcome\n- goodbye\n- autoread (on/off)\n- autoview (on/off)\n\nExample: .set prefix #'
+                text: '*⚙️ Settings Manager*\n\nUsage: .set <key> <value>\n\n*Keys:*\n- prefix\n- owner\n- welcome\n- goodbye\n- autoread (on/off)\n- rank (on/off)\n\nExample: .set rank on'
             });
         }
 
@@ -87,19 +87,13 @@ module.exports = {
                 responseText = `Auto Read is now ${arState ? 'ON' : 'OFF'}`;
                 break;
             case 'autoview':
-                const avState = value.toLowerCase() === 'on';
-                updateObj = { autoViewOnce: avState }; // Note: Schema might check UserSettings vs BotConfig.
-                // Usually autoViewOnce is in UserSettingsSchema? 
-                // Let's check DB. Yes, UserSettings.
-                // But user wants "all settings". 
-                // We should technically update UserSettings here if it's that type.
-                // For simplicity, let's stick to BotConfig schema fields we added OR handle UserSettings too.
-                // Let's handle BotConfig fields first.
-                // For this plugin, let's assume we updating global bot config.
-                // If autoViewOnce is per user, we should use wasi_setUserAutoStatus... but that's for "status view".
-                // If "autoview" means "auto view status", it's UserSettings.
-                // If "autoview" means "view once reveal", it might be different.
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Use .autostatus command for status settings.' });
+            case 'rank':
+            case 'levelup':
+                const rankState = value.toLowerCase() === 'on';
+                updateObj = { levelup: rankState };
+                responseText = `Rank & Level Up system is now ${rankState ? 'ON' : 'OFF'}`;
+                break;
             default:
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ Unknown setting key.' });
         }

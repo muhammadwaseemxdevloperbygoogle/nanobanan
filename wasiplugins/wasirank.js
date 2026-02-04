@@ -7,7 +7,10 @@ module.exports = {
     aliases: ['rank', 'profile', 'level', 'top'],
     category: 'Games',
     wasi_handler: async (sock, from, context) => {
-        const { wasi_sender, wasi_msg, wasi_args, wasi_text, sessionId, wasi_isGroup } = context;
+        const { wasi_sender, wasi_msg, wasi_args, wasi_text, sessionId, wasi_isGroup, config } = context;
+        if (config && config.levelup === false) {
+            return await sock.sendMessage(from, { text: '❌ The Rank & Level Up system is currently disabled.' }, { quoted: wasi_msg });
+        }
         const cmd = wasi_text.trim().split(' ')[0].toLowerCase(); // .rank or .top
 
         // --- TOP / LEADERBOARD ---

@@ -40,6 +40,7 @@ module.exports = {
     autoGoodbye: process.env.AUTO_GOODBYE === 'true',
     welcomeMessage: process.env.WELCOME_MSG || "Hello @user, Welcome to @group! 👋\n\n> Read the description to avoid bans.\n\nPowered by WASI BOT",
     goodbyeMessage: process.env.GOODBYE_MSG || "@user LEFT THE ROOM HAVE NICE DAY! 👋\n\nPowered by WASI BOT",
+    levelup: process.env.LEVEL_UP !== 'false', // Default true
 
     // ---------------------------------------------------------------------------
     // PRESENCE

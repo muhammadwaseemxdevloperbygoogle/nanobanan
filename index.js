@@ -679,7 +679,7 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             const currentTime = Math.floor(Date.now() / 1000);
 
             // --- XP SYSTEM ---
-            if (!wasi_msg.key.fromMe) {
+            if (!wasi_msg.key.fromMe && currentConfig.levelup) {
                 try {
                     const { wasi_addXP, wasi_getXP } = require('./wasilib/database');
                     const { generateLevelUpCard } = require('./wasilib/levelup');
