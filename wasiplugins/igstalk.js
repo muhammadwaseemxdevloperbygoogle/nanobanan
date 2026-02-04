@@ -15,15 +15,17 @@ module.exports = {
         try {
             await wasi_sock.sendMessage(wasi_sender, { text: `⏳ *Fetching Instagram info for ${username}...*` }, { quoted: wasi_msg });
 
-            // PRIMARY: WASI DEV APIs (Not implemented in your API yet, so we use fallback)
-            // But if you add it, it will look like this:
-            /*
-            const data = await wasiApi('/api/stalk/instagram', { username }, fallbackFn);
-            */
-
-            // For now, use the robust fallback logic
+            // PRIMARY: WASI DEV APIs
             const getInstagramData = async () => {
-                // Strategy 1: Maher Zubair API
+                // Strategy 0: WASI DEV APIs (Native Scraper)
+                try {
+                    const data = await wasiApi('/api/stalk/instagram', { username });
+                    if (data && data.status && data.result) {
+                        return { status: 200, result: data.result };
+                    }
+                } catch (e) { console.log('WASI API IG Stalk Failed'); }
+
+                // Strategy 1: Maher Zubair API (Fallback)
                 try {
                     const apiUrl = `https://api.maher-zubair.tech/stalk/instagram?q=${encodeURIComponent(username)}`;
                     const response = await axios.get(apiUrl);
