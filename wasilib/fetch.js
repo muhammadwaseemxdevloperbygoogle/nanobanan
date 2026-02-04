@@ -12,7 +12,8 @@ const defaultHeaders = {
 async function wasi_get(url, headers = {}) {
     try {
         const response = await axios.get(url, {
-            headers: { ...defaultHeaders, ...headers }
+            headers: { ...defaultHeaders, ...headers },
+            timeout: 15000 // 15s timeout
         });
         return response.data;
     } catch (error) {
@@ -30,7 +31,8 @@ async function wasi_post(url, data, headers = {}) {
                 ...defaultHeaders,
                 "Content-Type": "application/json",
                 ...headers,
-            }
+            },
+            timeout: 15000
         });
         return response.data;
     } catch (error) {
@@ -45,7 +47,8 @@ async function wasi_getBuffer(url, headers = {}) {
     try {
         const response = await axios.get(url, {
             headers: { ...defaultHeaders, Accept: "*/*", ...headers },
-            responseType: 'arraybuffer'
+            responseType: 'arraybuffer',
+            timeout: 20000 // Buffer downloads get 20s
         });
         return Buffer.from(response.data);
     } catch (error) {

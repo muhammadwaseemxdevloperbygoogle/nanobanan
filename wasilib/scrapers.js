@@ -162,19 +162,38 @@ async function wasi_facebook(url) {
 
     // Strategy 1: SriHub API (Priority)
     try {
-        console.log('[FB] Trying SriHub Scraper...');
+        // Clean URL: Remove FB tracking/rdid params that can break some APIs
+        const cleanUrl = url.split('?')[0];
+        console.log(`[FB] Trying SriHub Scraper with: ${cleanUrl}`);
+
         const apikey = config.sriHubApiKey || 'dew_STvVbGFwTS4lmZ61Eu0l5e9xzOIqrCLQ5Z8LitEZ';
-        const apiUrl = `https://api.srihub.store/download/facebook?url=${encodeURIComponent(url)}&apikey=${apikey}`;
+        const apiUrl = `https://api.srihub.store/download/facebook?url=${encodeURIComponent(cleanUrl)}&apikey=${apikey}`;
         const data = await wasi_get(apiUrl);
 
         if (data && data.status && data.data) {
             return {
                 status: true,
                 provider: 'SriHub',
-                sd: data.data.sd || data.data.url || data.data.dl,
+                sd: data.data.sd || data.data.url || data.data.dl || data.data.download_url,
                 hd: data.data.hd || data.data.sd || data.data.url,
                 title: data.data.title || 'Facebook Video'
             };
+        } else {
+            console.log(`[FB] SriHub returned non-success: ${JSON.stringify(data).slice(0, 100)}`);
+            // Try 'fb' as fallback endpoint if 'facebook' failed
+            if (url.includes('facebook.com')) {
+                const altUrl = `https://api.srihub.store/download/fb?url=${encodeURIComponent(cleanUrl)}&apikey=${apikey}`;
+                const altData = await wasi_get(altUrl).catch(() => null);
+                if (altData && altData.status && altData.data) {
+                    return {
+                        status: true,
+                        provider: 'SriHub-Alt',
+                        sd: altData.data.sd || altData.data.url || altData.data.dl,
+                        hd: altData.data.hd || altData.data.sd || altData.data.url,
+                        title: altData.data.title || 'Facebook Video'
+                    };
+                }
+            }
         }
     } catch (e) {
         console.error('SriHub FB Failed:', e.message);
@@ -338,6 +357,8 @@ async function wasi_youtube(url, type = 'video') {
                 thumbnail: data.data.thumbnail || '',
                 downloadUrl: data.data.download_url || data.data.url || data.data.dl
             };
+        } else {
+            console.log(`[YT] SriHub returned non-success: ${JSON.stringify(data).slice(0, 100)}`);
         }
     } catch (e) {
         console.error('SriHub YT Failed:', e.message);
