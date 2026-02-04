@@ -230,6 +230,29 @@ async function startSession(sessionId) {
 
     wasi_sock.ev.on('creds.update', saveCreds);
 
+    // Call Rejection (Anti-Call)
+    wasi_sock.ev.on('call', async (calls) => {
+        const sessionConfig = sessions.get(sessionId)?.config || config;
+        if (sessionConfig.autoRejectCall) {
+            for (const call of calls) {
+                if (call.status === 'offer') {
+                    console.log(`☎️ [ANTICALL] Rejecting call from: ${call.from}`);
+                    await wasi_sock.rejectCall(call.id, call.from);
+
+                    const message = sessionConfig.anticallMessage || "*Hii, I am WASI-MD-V7.*\n\n⚠️ *I cannot receive calls right now.*\nPlease leave a text message instead.\n\n> _Auto-Reject Feature_";
+
+                    await wasi_sock.sendMessage(call.from, {
+                        text: message,
+                        contextInfo: {
+                            forwardingScore: 999,
+                            isForwarded: true
+                        }
+                    });
+                }
+            }
+        }
+    });
+
     // Group Participants Update
     wasi_sock.ev.on('group-participants.update', async (update) => {
         const { handleGroupParticipantsUpdate } = require('./wasilib/groupevents');

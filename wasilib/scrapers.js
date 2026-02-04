@@ -3,14 +3,37 @@ const instatouch = require('instatouch');
 const { instagramGetUrl } = require('instagram-url-direct');
 const config = require('../wasi');
 const fbdl = require('fbdl-core');
+const { wasiApi } = require('./wasiapi');
 
 /**
  * TikTok Downloader with Fallback Strategy
+ * PRIMARY: WASI DEV APIs
+ * FALLBACK: TiklyDown, TikWM
  * @param {string} url - The TikTok video URL
  * @returns {Promise<Object>} - { result: { title, author, cover, wm_url, no_wm_url, music, type: 'video'|'image' } }
  */
 async function wasi_tiktok(url) {
-    // Strategy 1: TiklyDown
+    // Strategy 0: WASI DEV APIs (PRIMARY)
+    try {
+        const data = await wasiApi('/api/tiktok/download', { url });
+
+        if (data && data.status && data.result) {
+            return {
+                status: true,
+                provider: 'WASI-DEV-APIs',
+                title: data.result.title,
+                author: data.result.author?.nickname || data.result.author,
+                cover: data.result.cover || '',
+                video: data.result.no_wm,
+                audio: data.result.music,
+                caption: data.result.title
+            };
+        }
+    } catch (e) {
+        console.error('WASI-DEV-APIs TikTok Failed:', e.message);
+    }
+
+    // Strategy 1: TiklyDown (Fallback)
     try {
         const apiUrl = `https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(url)}`;
         const data = await wasi_get(apiUrl);
@@ -31,7 +54,7 @@ async function wasi_tiktok(url) {
         console.error('TiklyDown Failed:', e.message);
     }
 
-    // Strategy 2: TikWM
+    // Strategy 2: TikWM (Fallback)
     try {
         const apiUrl = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
         const data = await wasi_get(apiUrl);
@@ -58,11 +81,33 @@ async function wasi_tiktok(url) {
 
 /**
  * Instagram Downloader with Fallback Strategy
+ * PRIMARY: WASI DEV APIs
+ * FALLBACK: IG-Direct, Instatouch, SnapInsta
  * @param {string} url - The Instagram post/reel URL
  * @returns {Promise<Object>} - { status: true, media: [{ url, type: 'video'|'image' }], caption }
  */
 async function wasi_instagram(url) {
-    // Strategy 1: instagram-url-direct (Modern Scraper)
+    // Strategy 0: WASI DEV APIs (PRIMARY)
+    try {
+        const data = await wasiApi('/api/download/instagram', { url });
+
+        if (data && data.status && data.result) {
+            const mediaList = Array.isArray(data.result) ? data.result : [data.result];
+            return {
+                status: true,
+                provider: 'WASI-DEV-APIs',
+                caption: '',
+                media: mediaList.map(item => ({
+                    url: item.url || item,
+                    type: (item.url || item).includes('.mp4') || (item.url || item).includes('video') ? 'video' : 'image'
+                }))
+            };
+        }
+    } catch (e) {
+        console.error('WASI-DEV-APIs Instagram Failed:', e.message);
+    }
+
+    // Strategy 1: instagram-url-direct (Fallback)
     try {
         const data = await instagramGetUrl(url);
         if (data && data.url_list && data.url_list.length > 0) {
@@ -486,9 +531,28 @@ async function wasi_spotify(url) {
 
 /**
  * Pinterest Downloader
+ * PRIMARY: WASI DEV APIs
+ * FALLBACK: Vreden, Siputzx, BK9
  */
 async function wasi_pinterest(url) {
-    // Strategy 1: Vreden v1
+    // Strategy 0: WASI DEV APIs (PRIMARY)
+    try {
+        const data = await wasiApi('/api/download/pinterest', { url });
+
+        if (data && data.status && data.result) {
+            return {
+                status: true,
+                provider: 'WASI-DEV-APIs',
+                url: data.result,
+                type: data.type || 'image',
+                title: 'Pinterest Media'
+            };
+        }
+    } catch (e) {
+        console.error('WASI-DEV-APIs Pinterest Failed:', e.message);
+    }
+
+    // Strategy 1: Vreden v1 (Fallback)
     try {
         const apiUrl = `https://api.vreden.my.id/api/v1/download/pinterest?url=${encodeURIComponent(url)}`;
         const data = await wasi_get(apiUrl);
@@ -538,9 +602,26 @@ async function wasi_pinterest(url) {
 
 /**
  * Pinterest Search
+ * PRIMARY: WASI DEV APIs
+ * FALLBACK: Vreden, Siputzx
  */
 async function wasi_pinterest_search(query) {
-    // Strategy 1: Vreden v1
+    // Strategy 0: WASI DEV APIs (PRIMARY)
+    try {
+        const data = await wasiApi('/api/search/pinterest', { q: query });
+
+        if (data && data.status && data.result) {
+            return {
+                status: true,
+                provider: 'WASI-DEV-APIs',
+                result: data.result
+            };
+        }
+    } catch (e) {
+        console.error('WASI-DEV-APIs Pinterest Search Failed:', e.message);
+    }
+
+    // Strategy 1: Vreden v1 (Fallback)
     try {
         const apiUrl = `https://api.vreden.my.id/api/v1/search/pinterest?query=${encodeURIComponent(query)}`;
         const data = await wasi_get(apiUrl);
