@@ -785,6 +785,21 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         }
 
         // -------------------------------------------------------------------------
+        // AUTO REACTION LOGIC (FROM PLUGIN)
+        // -------------------------------------------------------------------------
+        try {
+            const { autoReactLogic } = require('./wasiplugins/autoreact');
+            // We pass isCmd loosely as 'false' here for now, or calculate it.
+            // Calculating isCmd:
+            const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
+            const isCmd = prefixes.some(p => wasi_text.trim().startsWith(p));
+
+            await autoReactLogic(wasi_sock, wasi_msg, isCmd);
+        } catch (arErr) {
+            // console.error('AutoReact Logic Error:', arErr); 
+        }
+
+        // -------------------------------------------------------------------------
         // ADVANCED ANTILINK CHECK
         // -------------------------------------------------------------------------
         if (wasi_origin.endsWith('@g.us') && wasi_text) {
