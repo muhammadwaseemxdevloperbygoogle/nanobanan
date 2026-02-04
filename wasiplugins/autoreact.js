@@ -32,10 +32,14 @@ module.exports = {
                 if (action === 'false') {
                     if (checkinfo.autoreaction === 'false') return await wasi_sock.sendMessage(wasi_sender, { text: '*_Auto_Reaction Already Disabled_*' }, { quoted: wasi_msg });
                     await wasi_updateBotConfig(sessionId, { 'autoreaction': 'false' });
+                    // Update runtime config immediately
+                    if (context.config) context.config.autoreaction = 'false';
                     await wasi_sock.sendMessage(wasi_sender, { text: '*_Auto_Reaction Successfully Disabled!_*' }, { quoted: wasi_msg });
                 } else if (action === 'cmd' || action === 'all' || action === 'true') {
                     if (checkinfo.autoreaction === action) return await wasi_sock.sendMessage(wasi_sender, { text: `*_Auto_Reaction Already set to ${action}!_*` }, { quoted: wasi_msg });
                     await wasi_updateBotConfig(sessionId, { 'autoreaction': action });
+                    // Update runtime config immediately
+                    if (context.config) context.config.autoreaction = action;
                     await wasi_sock.sendMessage(wasi_sender, { text: `*_Auto_Reaction Successfully Enabled (${action})!_*` }, { quoted: wasi_msg });
                 } else {
                     await wasi_sock.sendMessage(wasi_sender, { text: '*_Please provide valid instructions!_*\n*_Use on/all/cmd/off to set Auto Reaction!_*' }, { quoted: wasi_msg });
