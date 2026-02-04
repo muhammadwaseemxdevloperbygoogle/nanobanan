@@ -160,7 +160,27 @@ async function wasi_facebook(url) {
         console.error('[FB] URL Expansion Failed:', e.message);
     }
 
-    // Strategy 1: Apify Facebook Posts Scraper (Premium Scraper)
+    // Strategy 1: SriHub API (Priority)
+    try {
+        console.log('[FB] Trying SriHub Scraper...');
+        const apikey = config.sriHubApiKey || 'dew_STvVbGFwTS4lmZ61Eu0l5e9xzOIqrCLQ5Z8LitEZ';
+        const apiUrl = `https://api.srihub.store/download/facebook?url=${encodeURIComponent(url)}&apikey=${apikey}`;
+        const data = await wasi_get(apiUrl);
+
+        if (data && data.status && data.data) {
+            return {
+                status: true,
+                provider: 'SriHub',
+                sd: data.data.sd || data.data.url || data.data.dl,
+                hd: data.data.hd || data.data.sd || data.data.url,
+                title: data.data.title || 'Facebook Video'
+            };
+        }
+    } catch (e) {
+        console.error('SriHub FB Failed:', e.message);
+    }
+
+    // Strategy 2: Apify Facebook Posts Scraper (Premium Scraper)
     try {
         if (config.apifyToken) {
             console.log('[FB] Trying Apify Scraper...');
