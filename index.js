@@ -1473,7 +1473,8 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                         wasi_isOwner,
                         wasi_isSudo,
                         wasi_groupMetadata: groupMetadata,
-                        wasi_store: sessions.get(sessionId)?.messageLog
+                        wasi_store: sessions.get(sessionId)?.messageLog,
+                        wasi_cmd_input
                     });
 
                 } catch (err) {
