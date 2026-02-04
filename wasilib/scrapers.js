@@ -301,7 +301,29 @@ async function wasi_twitter(url) {
  * @param {string} type - 'video' or 'audio'
  */
 async function wasi_youtube(url, type = 'video') {
-    // Strategy 1: Vreden API
+    // Strategy 1: SriHub API (Priority)
+    try {
+        console.log(`[YT Scraping] Trying SriHub (${type})...`);
+        const endpoint = type === 'audio' ? 'ytmp3' : 'ytmp4';
+        const apikey = config.sriHubApiKey || 'dew_STvVbGFwTS4lmZ61Eu0l5e9xzOIqrCLQ5Z8LitEZ';
+        const apiUrl = `https://api.srihub.store/download/${endpoint}?url=${encodeURIComponent(url)}&apikey=${apikey}`;
+        const data = await wasi_get(apiUrl);
+
+        if (data && data.status && data.data) {
+            return {
+                status: true,
+                type: type,
+                provider: 'SriHub',
+                title: data.data.title || 'YouTube Media',
+                thumbnail: data.data.thumbnail || '',
+                downloadUrl: data.data.download_url || data.data.url || data.data.dl
+            };
+        }
+    } catch (e) {
+        console.error('SriHub YT Failed:', e.message);
+    }
+
+    // Strategy 2: Vreden API
     try {
         console.log(`[YT Scraping] Trying Vreden (${type})...`);
         const endpoint = type === 'audio' ? 'mp3' : 'video';
