@@ -794,10 +794,23 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
             const isCmd = prefixes.some(p => wasi_text.trim().startsWith(p));
 
-            await autoReactLogic(wasi_sock, wasi_msg, isCmd);
+            await autoReactLogic(wasi_sock, wasi_msg, isCmd, currentConfig);
         } catch (arErr) {
             // console.error('AutoReact Logic Error:', arErr); 
         }
+
+        // -------------------------------------------------------------------------
+        // AUTO PRESENCE (WAPRESENCE)
+        // -------------------------------------------------------------------------
+        try {
+            if (!wasi_msg.key.fromMe) {
+                const presence = currentConfig.waPresence || process.env.WAPRESENCE || 'recording';
+                // statuses: 'unavailable', 'available', 'composing', 'recording', 'paused'
+                if (presence && presence !== 'unavailable') {
+                    await wasi_sock.sendPresenceUpdate(presence, wasi_origin);
+                }
+            }
+        } catch (presErr) { console.error('Presence Error:', presErr.message); }
 
         // -------------------------------------------------------------------------
         // ADVANCED ANTILINK CHECK
