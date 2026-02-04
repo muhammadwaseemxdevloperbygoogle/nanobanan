@@ -5,6 +5,7 @@ module.exports = {
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
         const { wasi_msg, wasi_args } = context;
         const axios = require('axios');
+        const { wasiApi } = require('../wasilib/wasiapi');
 
         const username = wasi_args[0];
         if (!username) {
@@ -14,11 +15,50 @@ module.exports = {
         try {
             await wasi_sock.sendMessage(wasi_sender, { text: `⏳ *Fetching Instagram info for ${username}...*` }, { quoted: wasi_msg });
 
-            const apiUrl = `https://api.maher-zubair.tech/stalk/instagram?q=${encodeURIComponent(username)}`;
-            const response = await axios.get(apiUrl);
-            const data = response.data;
+            // PRIMARY: WASI DEV APIs (Not implemented in your API yet, so we use fallback)
+            // But if you add it, it will look like this:
+            /*
+            const data = await wasiApi('/api/stalk/instagram', { username }, fallbackFn);
+            */
 
-            if (data.status !== 200 || !data.result) {
+            // For now, use the robust fallback logic
+            const getInstagramData = async () => {
+                // Strategy 1: Maher Zubair API
+                try {
+                    const apiUrl = `https://api.maher-zubair.tech/stalk/instagram?q=${encodeURIComponent(username)}`;
+                    const response = await axios.get(apiUrl);
+                    if (response.data.status === 200 && response.data.result) {
+                        return response.data;
+                    }
+                } catch (e) { console.log('Maher Zubair IG Stalk Failed'); }
+
+                // Strategy 2: Siputzx API (Backup)
+                try {
+                    const apiUrl = `https://api.siputzx.my.id/api/s/instagram?username=${encodeURIComponent(username)}`;
+                    const response = await axios.get(apiUrl);
+                    if (response.data.status && response.data.data) {
+                        const d = response.data.data;
+                        return {
+                            status: 200,
+                            result: {
+                                photo_profile: d.url, // Profile pic might be different field
+                                username: d.username,
+                                fullname: d.fullName,
+                                posts: d.postsCount,
+                                followers: d.followers,
+                                following: d.following,
+                                bio: d.biography
+                            }
+                        };
+                    }
+                } catch (e) { console.log('Siputzx IG Stalk Failed'); }
+
+                return null;
+            };
+
+            const data = await getInstagramData();
+
+            if (!data || data.status !== 200 || !data.result) {
                 return await wasi_sock.sendMessage(wasi_sender, { text: '❌ An error occurred or user not found.' }, { quoted: wasi_msg });
             }
 
