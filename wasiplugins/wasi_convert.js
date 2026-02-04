@@ -1,7 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const fs = require('fs');
-const path = require('path');
 const ffmpeg = require('../wasilib/ffmpeg'); // Use our configured ffmpeg
 
 module.exports = {
