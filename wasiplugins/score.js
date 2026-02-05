@@ -23,7 +23,11 @@ module.exports = {
             }
 
             let msg = `*🏏 MATCH DETAILS*\n`;
-            msg += `🆔 *ID:* ${matchId}\n\n`;
+            msg += `🆔 *ID:* ${matchId}\n`;
+
+            if (data.players && data.players.teamBat) {
+                msg += `⚔️ *Match:* ${data.players.teamBat} vs ${data.players.teamBowl}\n`;
+            }
 
             msg += `📊 *Status:* ${data.liveStatus}\n`;
             msg += `🔢 *Score:* ${data.liveScore}\n`;
@@ -31,7 +35,7 @@ module.exports = {
 
             if (data.players) {
                 if (data.players.batting && data.players.batting.length > 0) {
-                    msg += `*🏏 BATTING:*\n`;
+                    msg += `*🏏 ${data.players.teamBat || 'BATTING'}:*\n`;
                     data.players.batting.forEach(p => {
                         msg += `• *${p.name}*: ${p.runs}(${p.balls}) ${p.fours}x4 ${p.sixes}x6 ${p.striker ? '⭐' : ''}\n`;
                     });
