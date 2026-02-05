@@ -1,0 +1,65 @@
+module.exports = {
+    name: 'score',
+    aliases: ['runs', 'details'],
+    category: 'Sports',
+    desc: 'Get live score and match details',
+    wasi_handler: async (sock, from, context) => {
+        const { wasi_msg, wasi_args } = context;
+        const axios = require('axios');
+
+        if (!wasi_args[0]) {
+            return await sock.sendMessage(from, { text: "❌ Please provide a Match ID.\nExample: *.score 123456*" }, { quoted: wasi_msg });
+        }
+
+        const matchId = wasi_args[0];
+        const API_URL = `http://localhost:3000/api/cricket/details?id=${matchId}`;
+
+        try {
+            // await sock.sendMessage(from, { text: '🔄 Fetching match details...' }, { quoted: wasi_msg });
+
+            const { data } = await axios.get(API_URL);
+
+            if (!data.status) {
+                return await sock.sendMessage(from, { text: "❌ Failed to fetch details. Invalid ID or API error." }, { quoted: wasi_msg });
+            }
+
+            let msg = `*🏏 MATCH DETAILS*\n`;
+            msg += `🆔 *ID:* ${matchId}\n\n`;
+
+            msg += `📊 *Status:* ${data.liveStatus}\n`;
+            msg += `🔢 *Score:* ${data.liveScore}\n`;
+            msg += `──────────────────\n`;
+
+            if (data.players) {
+                if (data.players.batting && data.players.batting.length > 0) {
+                    msg += `*🏏 BATTING:*\n`;
+                    data.players.batting.forEach(p => {
+                        msg += `• *${p.name}*: ${p.runs}(${p.balls}) ${p.fours}x4 ${p.sixes}x6 ${p.striker ? '⭐' : ''}\n`;
+                    });
+                    msg += `\n`;
+                }
+
+                if (data.players.bowling && data.players.bowling.length > 0) {
+                    msg += `*🥎 BOWLING:*\n`;
+                    data.players.bowling.forEach(p => {
+                        msg += `• *${p.name}*: ${p.wickets}-${p.runs} (${p.overs})\n`;
+                    });
+                    msg += `\n`;
+                }
+            }
+
+            if (data.commentary && data.commentary.length > 0) {
+                msg += `*🎙️ COMMENTARY:*\n`;
+                data.commentary.slice(0, 2).forEach(c => {
+                    msg += `> ${c}\n\n`;
+                });
+            }
+
+            await sock.sendMessage(from, { text: msg }, { quoted: wasi_msg });
+
+        } catch (error) {
+            console.error('Score Command Error:', error.message);
+            await sock.sendMessage(from, { text: "❌ Error fetching scores. Make sure the API is running." }, { quoted: wasi_msg });
+        }
+    }
+};
