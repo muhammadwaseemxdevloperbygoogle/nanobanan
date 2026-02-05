@@ -5,13 +5,12 @@ module.exports = {
     desc: 'List live cricket matches',
     wasi_handler: async (sock, from, context) => {
         const { wasi_msg, wasi_args } = context;
-        const axios = require('axios');
-        const API_URL = 'http://localhost:3000/api/cricket/live';
+        const { wasi_cricket_live } = require('../wasilib/cricket');
 
         try {
             await sock.sendMessage(from, { text: '🔄 Fetching live matches...' }, { quoted: wasi_msg });
 
-            const { data } = await axios.get(API_URL);
+            const data = await wasi_cricket_live();
 
             if (!data.status || !data.matches || data.matches.length === 0) {
                 return await sock.sendMessage(from, { text: "🏏 No live matches found currently." }, { quoted: wasi_msg });
@@ -39,7 +38,7 @@ module.exports = {
 
         } catch (error) {
             console.error('Match Command Error:', error.message);
-            await sock.sendMessage(from, { text: "❌ Error fetching matches. Make sure the API is running." }, { quoted: wasi_msg });
+            await sock.sendMessage(from, { text: "❌ Error fetching matches." }, { quoted: wasi_msg });
         }
     }
 };

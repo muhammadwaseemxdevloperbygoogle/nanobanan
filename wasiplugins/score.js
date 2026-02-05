@@ -5,19 +5,18 @@ module.exports = {
     desc: 'Get live score and match details',
     wasi_handler: async (sock, from, context) => {
         const { wasi_msg, wasi_args } = context;
-        const axios = require('axios');
+        const { wasi_cricket_details } = require('../wasilib/cricket');
 
         if (!wasi_args[0]) {
             return await sock.sendMessage(from, { text: "❌ Please provide a Match ID.\nExample: *.score 123456*" }, { quoted: wasi_msg });
         }
 
         const matchId = wasi_args[0];
-        const API_URL = `http://localhost:3000/api/cricket/details?id=${matchId}`;
 
         try {
             // await sock.sendMessage(from, { text: '🔄 Fetching match details...' }, { quoted: wasi_msg });
 
-            const { data } = await axios.get(API_URL);
+            const data = await wasi_cricket_details(matchId);
 
             if (!data.status) {
                 return await sock.sendMessage(from, { text: "❌ Failed to fetch details. Invalid ID or API error." }, { quoted: wasi_msg });
@@ -59,7 +58,7 @@ module.exports = {
 
         } catch (error) {
             console.error('Score Command Error:', error.message);
-            await sock.sendMessage(from, { text: "❌ Error fetching scores. Make sure the API is running." }, { quoted: wasi_msg });
+            await sock.sendMessage(from, { text: "❌ Error fetching scores." }, { quoted: wasi_msg });
         }
     }
 };

@@ -12,6 +12,7 @@ module.exports = {
     sessionId: process.env.SESSION_ID || 'wasi_session',
     sudo: process.env.SUDO ? process.env.SUDO.split(',').map(s => s.trim()) : [],
     mongoDbUrl: process.env.MONGODB_URI || process.env.MONGODB_URL || '',
+    apiUrl: process.env.API_URL || 'http://localhost:3000',
 
     // ---------------------------------------------------------------------------
     // TIME & REGION
