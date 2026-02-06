@@ -14,7 +14,7 @@ module.exports = {
         const query = wasi_args.join(' ');
 
         try {
-            await sock.sendMessage(from, { text: `🚀 *Processing:* Searching and preparing download for "${query}"...` }, { quoted: wasi_msg });
+            await sock.sendMessage(from, { text: `🚀 *Processing:* Searching and preparing downloads for "${query}"...` }, { quoted: wasi_msg });
 
             const data = await wasi_kitabnagri_search(query);
 
@@ -22,35 +22,44 @@ module.exports = {
                 return await sock.sendMessage(from, { text: "❌ *No Results Found*\nCheck the spelling or be more specific." }, { quoted: wasi_msg });
             }
 
-            // Process top 1 match for auto-download
-            const target = data.results[0];
-            const details = await wasi_kitabnagri_details(target.link);
+            // Filter for high-confidence matches (similarity > 0.4)
+            // Limit to top 3 to avoid spam/crashes
+            const matches = data.results.filter(r => r.similarity > 0.4).slice(0, 3);
 
-            if (!details.status || !details.downloadLink) {
-                return await sock.sendMessage(from, { text: `❌ *Failed:* Could not extract download link for "${target.title}".` }, { quoted: wasi_msg });
+            if (matches.length === 0) {
+                // Try top match anyway if similarity is low but it's the only one
+                matches.push(data.results[0]);
             }
 
-            // Only MediaFire links supported for direct automated extraction here
-            if (details.downloadLink.includes('mediafire.com')) {
-                const dlData = await wasi_mediafire_dl(details.downloadLink);
-                if (dlData.status && dlData.result.downloadUrl) {
-                    await sock.sendMessage(from, { text: `📦 *Found:* ${dlData.result.fileName} (${dlData.result.fileSize})\n\n_Uploading to WhatsApp..._` }, { quoted: wasi_msg });
+            for (const target of matches) {
+                try {
+                    const details = await wasi_kitabnagri_details(target.link);
 
-                    return await sock.sendMessage(from, {
-                        document: { url: dlData.result.downloadUrl },
-                        fileName: dlData.result.fileName,
-                        mimetype: 'application/pdf',
-                        caption: `*📖 Novel:* ${dlData.result.fileName}\n*Size:* ${dlData.result.fileSize}\n\n_Powered by WASI-DEV-APIS_`
-                    }, { quoted: wasi_msg });
+                    if (!details.status || !details.downloadLink) continue;
+
+                    if (details.downloadLink.includes('mediafire.com')) {
+                        const dlData = await wasi_mediafire_dl(details.downloadLink);
+                        if (dlData.status && dlData.result.downloadUrl) {
+                            await sock.sendMessage(from, { text: `📦 *Found:* ${dlData.result.fileName} (${dlData.result.fileSize})\n\n_Uploading..._` }, { quoted: wasi_msg });
+
+                            await sock.sendMessage(from, {
+                                document: { url: dlData.result.downloadUrl },
+                                fileName: dlData.result.fileName,
+                                mimetype: 'application/pdf',
+                                caption: `*📖 Novel:* ${dlData.result.fileName}\n*Size:* ${dlData.result.fileSize}\n\n_Powered by WASI-DEV-APIS_`
+                            }, { quoted: wasi_msg });
+                            continue;
+                        }
+                    } else if (details.downloadLink.includes('drive.google.com')) {
+                        await sock.sendMessage(from, {
+                            text: `📂 *Google Drive:* ${details.title}\n*Link:* ${details.downloadLink}`
+                        }, { quoted: wasi_msg });
+                        continue;
+                    }
+                } catch (err) {
+                    console.error(`Auto-download failed for ${target.title}:`, err.message);
                 }
-            } else if (details.downloadLink.includes('drive.google.com')) {
-                // Return link since GDrive direct downloads can be blocked or requires specific handling
-                return await sock.sendMessage(from, {
-                    text: `📂 *Google Drive Link Found*\n\n*Title:* ${details.title}\n*Link:* ${details.downloadLink}\n\n_Automated upload for GDrive is currently restricted._`
-                }, { quoted: wasi_msg });
             }
-
-            await sock.sendMessage(from, { text: `❌ *Error:* Unsupported download source for this book.` }, { quoted: wasi_msg });
 
         } catch (error) {
             console.error('NovelDL Error:', error.message);
