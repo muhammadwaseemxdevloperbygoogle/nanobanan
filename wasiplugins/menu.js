@@ -3,7 +3,7 @@ const { getRandomMenuAsset, hasMenuAssets } = require('../wasilib/assets');
 
 module.exports = {
     name: 'menu',
-    aliases: ['help', 'commands', 'list'],
+    aliases: ['help', 'commands'],
     category: 'General',
     desc: 'Show all available commands',
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
