@@ -37,7 +37,11 @@ module.exports = {
                 if (data.players.batting && data.players.batting.length > 0) {
                     msg += `*🏏 ${data.players.teamBat || 'BATTING'}:*\n`;
                     data.players.batting.forEach(p => {
-                        msg += `• *${p.name}*: ${p.runs}(${p.balls}) ${p.fours}x4 ${p.sixes}x6 ${p.striker ? '⭐' : ''}\n`;
+                        let text = `• *${p.name}*: ${p.runs}(${p.balls})`;
+                        if (p.fours && p.sixes) text += ` ${p.fours}x4 ${p.sixes}x6`;
+                        if (p.striker) text += ` ⭐`;
+                        if (p.dismissal) text += `\n  _${p.dismissal}_`;
+                        msg += text + `\n`;
                     });
                     msg += `\n`;
                 }
