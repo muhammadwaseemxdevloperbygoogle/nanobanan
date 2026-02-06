@@ -34,24 +34,50 @@ module.exports = {
             msg += `──────────────────\n`;
 
             if (data.players) {
-                if (data.players.batting && data.players.batting.length > 0) {
-                    msg += `*🏏 ${data.players.teamBat || 'BATTING'}:*\n`;
-                    data.players.batting.forEach(p => {
-                        let text = `• *${p.name}*: ${p.runs}(${p.balls})`;
-                        if (p.fours && p.sixes) text += ` ${p.fours}x4 ${p.sixes}x6`;
-                        if (p.striker) text += ` ⭐`;
-                        if (p.dismissal) text += `\n  _${p.dismissal}_`;
-                        msg += text + `\n`;
-                    });
-                    msg += `\n`;
-                }
+                // NEW: Innings based structure
+                if (data.players.type === 'innings') {
+                    data.players.innings.forEach(inn => {
+                        msg += `*🚩 ${inn.team}*\n`;
+                        if (inn.batting && inn.batting.length > 0) {
+                            msg += `*🏏 BATTING:*\n`;
+                            inn.batting.forEach(p => {
+                                // Simple clean for name if it's too long due to dismissal text
+                                let dName = p.name.split('c ')[0].split('lbw')[0].split('b ')[0].trim();
+                                if (dName.length < 3) dName = p.name; // fallback if aggressive split failed
 
-                if (data.players.bowling && data.players.bowling.length > 0) {
-                    msg += `*🥎 BOWLING:*\n`;
-                    data.players.bowling.forEach(p => {
-                        msg += `• *${p.name}*: ${p.wickets}-${p.runs} (${p.overs})\n`;
+                                msg += `• *${dName}*: ${p.runs}(${p.balls})\n`;
+                            });
+                        }
+                        if (inn.bowling && inn.bowling.length > 0) {
+                            msg += `*🥎 BOWLING:*\n`;
+                            inn.bowling.forEach(p => {
+                                msg += `• *${p.name}*: ${p.wickets}-${p.runs} (${p.overs})\n`;
+                            });
+                        }
+                        msg += `\n`;
                     });
-                    msg += `\n`;
+                }
+                // FALLBACK: Old flat structure
+                else {
+                    if (data.players.batting && data.players.batting.length > 0) {
+                        msg += `*🏏 ${data.players.teamBat || 'BATTING'}:*\n`;
+                        data.players.batting.forEach(p => {
+                            let text = `• *${p.name}*: ${p.runs}(${p.balls})`;
+                            if (p.fours && p.sixes) text += ` ${p.fours}x4 ${p.sixes}x6`;
+                            if (p.striker) text += ` ⭐`;
+                            if (p.dismissal) text += `\n  _${p.dismissal}_`;
+                            msg += text + `\n`;
+                        });
+                        msg += `\n`;
+                    }
+
+                    if (data.players.bowling && data.players.bowling.length > 0) {
+                        msg += `*🥎 BOWLING:*\n`;
+                        data.players.bowling.forEach(p => {
+                            msg += `• *${p.name}*: ${p.wickets}-${p.runs} (${p.overs})\n`;
+                        });
+                        msg += `\n`;
+                    }
                 }
             }
 
