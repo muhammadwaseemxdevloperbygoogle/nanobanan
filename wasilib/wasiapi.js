@@ -15,7 +15,10 @@ async function wasiApi(endpoint, params = {}, fallbackFn = null) {
         const url = new URL(endpoint, WASIDEV_API_BASE);
         Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
 
-        const response = await axios.get(url.toString(), { timeout: 15000 });
+        // Longer timeout for YouTube downloads
+        const timeout = endpoint.includes('youtube') ? 35000 : 15000;
+
+        const response = await axios.get(url.toString(), { timeout });
 
         if (response.data && response.data.status) {
             return response.data;
