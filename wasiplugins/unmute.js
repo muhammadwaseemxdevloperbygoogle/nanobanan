@@ -4,36 +4,30 @@ module.exports = {
     category: 'Group',
     desc: 'Unmute group (everyone can send messages)',
     ownerOnly: false,
-    wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { wasi_msg } = context;
+    wasi_handler: async (sock, from, context) => {
+        const { wasi_msg, wasi_isGroup, wasi_isAdmin, wasi_botIsAdmin } = context;
 
-        if (!wasi_sender.endsWith('@g.us')) {
-            return wasi_sock.sendMessage(wasi_sender, { text: '❌ This command only works in groups!' });
+        if (!wasi_isGroup) {
+            return sock.sendMessage(from, { text: '❌ This command only works in groups!' }, { quoted: wasi_msg });
+        }
+
+        if (!wasi_botIsAdmin) {
+            return sock.sendMessage(from, { text: '❌ Bot must be admin to unmute group!' }, { quoted: wasi_msg });
+        }
+
+        if (!wasi_isAdmin) {
+            return sock.sendMessage(from, { text: '❌ You must be an admin to use this command!' }, { quoted: wasi_msg });
         }
 
         try {
-            const groupMeta = await wasi_sock.groupMetadata(wasi_sender);
-            const botId = wasi_sock.user.id.replace(/:.*@/, '@');
-            const senderId = wasi_msg.key.participant || wasi_sender;
-
-            const botAdmin = groupMeta.participants.find(p => p.id.includes(botId.split('@')[0]))?.admin;
-            if (!botAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ Bot must be admin to unmute group!' });
-            }
-
-            const senderAdmin = groupMeta.participants.find(p => p.id === senderId)?.admin;
-            if (!senderAdmin) {
-                return wasi_sock.sendMessage(wasi_sender, { text: '❌ You must be an admin to use this command!' });
-            }
-
-            await wasi_sock.groupSettingUpdate(wasi_sender, 'not_announcement');
-            await wasi_sock.sendMessage(wasi_sender, {
+            await sock.groupSettingUpdate(from, 'not_announcement');
+            await sock.sendMessage(from, {
                 text: '🔊 *Group Unmuted!*\n\nEveryone can send messages now.'
-            });
+            }, { quoted: wasi_msg });
 
         } catch (error) {
             console.error('Unmute error:', error);
-            await wasi_sock.sendMessage(wasi_sender, { text: '❌ Failed to unmute group.' });
+            await sock.sendMessage(from, { text: `❌ Failed to unmute group.\n\n*Error:* ${error.message}` }, { quoted: wasi_msg });
         }
     }
 };

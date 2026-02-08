@@ -25,16 +25,7 @@ module.exports = {
                     }
                 } catch (e) { console.log('WASI API IG Stalk Failed'); }
 
-                // Strategy 1: Maher Zubair API (Fallback)
-                try {
-                    const apiUrl = `https://api.maher-zubair.tech/stalk/instagram?q=${encodeURIComponent(username)}`;
-                    const response = await axios.get(apiUrl);
-                    if (response.data.status === 200 && response.data.result) {
-                        return response.data;
-                    }
-                } catch (e) { console.log('Maher Zubair IG Stalk Failed'); }
-
-                // Strategy 2: Siputzx API (Backup)
+                // Strategy 1: Siputzx API (Backup)
                 try {
                     const apiUrl = `https://api.siputzx.my.id/api/s/instagram?username=${encodeURIComponent(username)}`;
                     const response = await axios.get(apiUrl);

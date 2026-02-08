@@ -22,11 +22,12 @@ async function handleGroupParticipantsUpdate(sock, update, config, sessionId) {
         const settings = await wasi_getGroupSettings(sessionId, id);
 
         // Determine if we should act
-        const doWelcome = settings?.welcome || (config.autoWelcome && !settings?.welcome === false);
-        const doGoodbye = settings?.goodbye || (config.autoGoodbye && !settings?.goodbye === false);
+        // Priority: Group-specific settings > Global config
+        const doWelcome = settings?.welcome !== undefined ? settings.welcome : (config.autoWelcome || false);
+        const doGoodbye = settings?.goodbye !== undefined ? settings.goodbye : (config.autoGoodbye || false);
 
         // Debug Log
-        // console.log(`[GroupEvents] Welcome: ${doWelcome}, Goodbye: ${doGoodbye} (Source: ${settings ? 'Group' : 'Global'})`);
+        console.log(`[GroupEvents] Welcome: ${doWelcome}, Goodbye: ${doGoodbye} (Config: W=${config.autoWelcome}, G=${config.autoGoodbye})`);
 
         if (!doWelcome && !doGoodbye) return;
 
