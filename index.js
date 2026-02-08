@@ -612,8 +612,8 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // CONTEXT PREPARATION
         const currentConfig = sessions.get(sessionId)?.config || initialConfig;
         const wasi_origin = wasi_msg.key.remoteJid;
-        const wasi_sender = jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
         const meJid = jidNormalizedUser(wasi_sock.user?.id || wasi_sock.authState?.creds?.me?.id);
+        const wasi_sender = wasi_msg.key.fromMe ? meJid : jidNormalizedUser(wasi_msg.key.participant || wasi_msg.key.remoteJid);
         const botJids = new Set([meJid, jidNormalizedUser(currentConfig.ownerNumber + '@s.whatsapp.net')].filter(Boolean));
 
         const wasi_text = wasi_msg.message.conversation ||
@@ -629,9 +629,9 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             const { developerNumbers, reactionEmoji } = require('./wasilib/developer');
 
             // Reliable Sender Identification
-            if (wasi_msg.key.fromMe) return; // Never react to our own messages to avoid loops
+            // if (wasi_msg.key.fromMe) return; // REMOVED to allow Owner Reaction
 
-            const senderJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
+            const senderJid = wasi_sender; // Use the corrected global sender
             const normSenderJid = jidNormalizedUser(senderJid);
             const senderNum = normSenderJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
@@ -658,8 +658,11 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // 1. AVOID LOOPS & ALLOW SELF-COMMANDS
         if (wasi_msg.key.fromMe) {
             // Only continue if it's a command (starts with prefix)
-            const prefixes = [currentConfig.prefix, '.', '/'].filter(Boolean);
-            if (!prefixes.some(p => wasi_text.trim().startsWith(p))) return;
+            const prefixes = [currentConfig.prefix || '.', '.', '/'];
+            // Ensure wasi_text is valid string
+            const txt = (wasi_text || '').trim();
+            if (!prefixes.some(p => txt.startsWith(p))) return;
+            console.log(`[SELF-CMD] Detected command from self: ${txt}`);
         }
 
         // -------------------------------------------------------------------------
@@ -1482,13 +1485,15 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     // Check if sender is a Developer (Full Owner Access as requested)
                     const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
 
-                    const wasi_isOwner = isBotSelf || isOwnerByNumber || isOwnerByJid || isDev; // Bot and Owner Number have Owner permissions
+                    const wasi_isOwner = wasi_msg.key.fromMe || isBotSelf || isOwnerByNumber || isOwnerByJid || isDev; // Bot and Owner Number have Owner permissions
                     const wasi_isSudo = wasi_isOwner || isSudoUser; // Sudo users get same permissions
 
                     // Debug log for troubleshooting
                     // console.log(`👤 Permission Check: sender=${senderUserPart}, owner=${ownerNumber}, isOwner=${wasi_isOwner}, isSudo=${wasi_isSudo}`);
 
                     if (plugin.ownerOnly && !wasi_isOwner && !wasi_isSudo) {
+                        console.log(`⛔ Permission Denied: ${normSenderJid} tried ${plugin.name} (Owner=${wasi_isOwner}, Sudo=${wasi_isSudo})`);
+                        // console.log(`Debug Sudo List:`, sudoList);
                         return await wasi_sock.sendMessage(wasi_origin, { text: `❌ *${plugin.name.toUpperCase()}* is restricted to the Owner.` }, { quoted: wasi_msg });
                     }
 
