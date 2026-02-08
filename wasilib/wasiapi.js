@@ -4,6 +4,7 @@ const config = require('../wasi');
 
 // WASI DEV APIs Configuration
 const WASIDEV_API_BASE = config.apiUrl || 'https://wasidev-apis-bcceee4d52a4.herokuapp.com';
+const WASIDEV_API_KEY = config.wasidevApiKey || process.env.WASIDEV_API_KEY || '';
 
 /**
  * Call WASI DEV APIs with automatic fallback
@@ -19,7 +20,16 @@ async function wasiApi(endpoint, params = {}, fallbackFn = null) {
         // Longer timeout for YouTube downloads
         const timeout = endpoint.includes('youtube') ? 35000 : 15000;
 
-        const response = await axios.get(url.toString(), { timeout });
+        // Prepare headers with API key
+        const headers = {};
+        if (WASIDEV_API_KEY) {
+            headers['x-api-key'] = WASIDEV_API_KEY;
+        }
+
+        const response = await axios.get(url.toString(), {
+            timeout,
+            headers
+        });
 
         if (response.data && response.data.status) {
             return response.data;
@@ -53,8 +63,15 @@ async function wasiApi(endpoint, params = {}, fallbackFn = null) {
 async function wasiApiPost(endpoint, formData) {
     try {
         const url = WASIDEV_API_BASE + endpoint;
+
+        // Prepare headers
+        const headers = formData.getHeaders ? formData.getHeaders() : {};
+        if (WASIDEV_API_KEY) {
+            headers['x-api-key'] = WASIDEV_API_KEY;
+        }
+
         const response = await axios.post(url, formData, {
-            headers: formData.getHeaders ? formData.getHeaders() : {},
+            headers,
             timeout: 30000
         });
         return response.data;
