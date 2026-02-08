@@ -385,6 +385,26 @@ async function wasi_twitter(url) {
  * @param {string} type - 'video' or 'audio'
  */
 async function wasi_youtube(url, type = 'video') {
+    // Strategy 0: WASI DEV APIs (PRIMARY)
+    try {
+        console.log(`[YT Scraping] Trying WASI-DEV-APIs (${type})...`);
+        const endpoint = type === 'audio' ? '/api/download/youtube/audio' : '/api/download/youtube/video';
+        // Pass params to wasiApi
+        const data = await wasiApi(endpoint, { url });
+
+        if (data && data.status) {
+            return {
+                status: true,
+                type: type,
+                provider: 'WASI-DEV-APIs',
+                title: data.title || 'YouTube Media',
+                thumbnail: data.thumbnail || '',
+                downloadUrl: data.result || data.url || data.downloadUrl
+            };
+        }
+    } catch (e) {
+        console.error('WASI-DEV-APIs YT Failed:', e.message);
+    }
     // Strategy 1: SriHub API (Priority)
     try {
         console.log(`[YT Scraping] Trying SriHub (${type})...`);

@@ -269,12 +269,13 @@ async function startSession(sessionId) {
             await handleGroupParticipantsUpdate(wasi_sock, update, sessionState.config, sessionId);
         });
 
+        await setupMessageHandler(wasi_sock, sessionId);
+
     } catch (e) {
         console.error(`❌ Error starting session ${sessionId}:`, e);
     } finally {
         sessionLocks.delete(sessionId);
     }
-    await setupMessageHandler(wasi_sock, sessionId);
 }
 
 // -----------------------------------------------------------------------------
