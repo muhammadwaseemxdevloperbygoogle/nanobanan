@@ -87,178 +87,193 @@ setInterval(() => {
 // SESSION MANAGEMENT
 // -----------------------------------------------------------------------------
 
+// Locks for startSession (Fixes Race Condition)
+const sessionLocks = new Set();
+
 async function startSession(sessionId) {
-    if (sessions.has(sessionId)) {
-        const existing = sessions.get(sessionId);
-        // If already connected and not forced, don't restart
-        if (existing.isConnected && existing.sock) {
-            console.log(`Session ${sessionId} is already connected. Skipping start.`);
-            return;
-        }
-
-        if (existing.sock) {
-            console.log(`Cleaning up old socket for ${sessionId}...`);
-            existing.sock.ev.removeAllListeners('connection.update');
-            existing.sock.end(undefined);
-            sessions.delete(sessionId);
-        }
+    if (sessionLocks.has(sessionId)) {
+        console.log(`Session ${sessionId} is already starting. Bailing.`);
+        return;
     }
+    sessionLocks.add(sessionId);
 
-    console.log(`🚀 Starting session: ${sessionId}`);
-
-    // Initialize session state
-    const sessionState = {
-        sock: null,
-        isConnected: false,
-        qr: null,
-        reconnectAttempts: 0,
-        messageLog: new Map(), // Cache for Antidelete
-        config: { ...config } // Default config
-    };
-    sessions.set(sessionId, sessionState);
-
-    // Load session-specific config from DB
-    const { wasi_getBotConfig } = require('./wasilib/database');
-    const dbConfig = await wasi_getBotConfig(sessionId);
-    if (dbConfig) {
-        sessionState.config = { ...config, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
-    }
-
-    // Connect to session (this creates the socket)
-    const { wasi_sock, saveCreds } = await wasi_connectSession(false, sessionId);
-
-    // Intercept sendMessage to apply session-specific font style
-    const originalSendMessage = wasi_sock.sendMessage;
-    wasi_sock.sendMessage = async (jid, content, options) => {
-        const sessionConfig = sessions.get(sessionId)?.config || config;
-        const style = sessionConfig.fontStyle || 'original';
-        if (style !== 'original') {
-            if (content.text) {
-                content.text = applyFont(content.text, style);
+    try {
+        if (sessions.has(sessionId)) {
+            const existing = sessions.get(sessionId);
+            // If already connected and not forced, don't restart
+            if (existing.isConnected && existing.sock) {
+                console.log(`Session ${sessionId} is already connected. Skipping start.`);
+                return;
             }
-            if (content.caption) {
-                content.caption = applyFont(content.caption, style);
-            }
-        }
 
-        // Add Channel Button / Newsletter Context
-        if (content && typeof content === 'object') {
-            content.contextInfo = {
-                ...(content.contextInfo || {}),
-                forwardingScore: 999,
-                isForwarded: true,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: sessionConfig.newsletterJid || '120363419652241844@newsletter',
-                    newsletterName: sessionConfig.newsletterName || 'WASI-MD-V7',
-                    serverMessageId: -1
-                }
-            };
-        }
-
-        return await originalSendMessage.call(wasi_sock, jid, content, options);
-    };
-
-    sessionState.sock = wasi_sock;
-
-    wasi_sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-            sessionState.qr = qr;
-            sessionState.isConnected = false;
-            console.log(`Creating QR for session: ${sessionId}`);
-        }
-
-        if (connection === 'close') {
-            sessionState.isConnected = false;
-            const statusCode = (lastDisconnect?.error instanceof Boom) ?
-                lastDisconnect.error.output.statusCode : 500;
-
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 440;
-
-            console.log(`Session ${sessionId}: Connection closed (${statusCode}), reconnecting: ${shouldReconnect}`);
-
-            // Double check if this session state is still the active one
-            const currentSession = sessions.get(sessionId);
-            if (currentSession && currentSession.sock === wasi_sock && shouldReconnect) {
-                setTimeout(() => {
-                    startSession(sessionId);
-                }, 3000); // 3 seconds delay
-            } else if (!shouldReconnect) {
-                console.log(`Session ${sessionId} logged out or replaced. Removing.`);
+            if (existing.sock) {
+                console.log(`Cleaning up old socket for ${sessionId}...`);
+                existing.sock.ev.removeAllListeners('connection.update');
+                existing.sock.end(undefined);
                 sessions.delete(sessionId);
-                await wasi_clearSession(sessionId);
-                await wasi_unregisterSession(sessionId);
             }
-        } else if (connection === 'open') {
-            sessionState.isConnected = true;
-            sessionState.qr = null;
-            sessionState.reconnectAttempts = 0;
-            console.log(`✅ [CONNECTION] ${sessionId}: Bot is fully connected to WhatsApp and groups.`);
+        }
 
-            // Register session in DB to ensure it restarts on server reboot
-            await wasi_registerSession(sessionId);
+        console.log(`🚀 Starting session: ${sessionId}`);
 
-            // Send Connected Message to Self
-            try {
-                const userJid = jidNormalizedUser(wasi_sock.user.id);
-                const caption = `┏━━┫ *SERVER STATUS* ┣━━┓\n` +
-                    `┃ 🟢 *Bot Connected Successfully!*\n` +
-                    `┃ 🤖 *Bot Name:* ${config.botName}\n` +
-                    `┃ 🆔 *Session:* ${sessionId}\n` +
-                    `┃ 📅 *Date:* ${new Date().toLocaleString()}\n` +
-                    `┗━━━━━━━━━━━━━━━━━━━┛\n\n` +
-                    `> _Powered by WASI BOT_`;
+        // Initialize session state
+        const sessionState = {
+            sock: null,
+            isConnected: false,
+            qr: null,
+            reconnectAttempts: 0,
+            messageLog: new Map(), // Cache for Antidelete
+            config: { ...config } // Default config
+        };
+        sessions.set(sessionId, sessionState);
 
-                const imageUrl = config.menuImage && config.menuImage.startsWith('http') ? config.menuImage : 'https://dummyimage.com/600x400/000/fff&text=WASI+BOT';
+        // Load session-specific config from DB
+        const { wasi_getBotConfig } = require('./wasilib/database');
+        const dbConfig = await wasi_getBotConfig(sessionId);
+        if (dbConfig) {
+            sessionState.config = { ...config, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
+        }
 
+        // Connect to session (this creates the socket)
+        const { wasi_sock, saveCreds } = await wasi_connectSession(false, sessionId);
+
+        // Intercept sendMessage to apply session-specific font style
+        const originalSendMessage = wasi_sock.sendMessage;
+        wasi_sock.sendMessage = async (jid, content, options) => {
+            const sessionConfig = sessions.get(sessionId)?.config || config;
+            const style = sessionConfig.fontStyle || 'original';
+            if (style !== 'original') {
+                if (content.text) {
+                    content.text = applyFont(content.text, style);
+                }
+                if (content.caption) {
+                    content.caption = applyFont(content.caption, style);
+                }
+            }
+
+            // Add Channel Button / Newsletter Context
+            if (content && typeof content === 'object') {
+                content.contextInfo = {
+                    ...(content.contextInfo || {}),
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: sessionConfig.newsletterJid || '120363419652241844@newsletter',
+                        newsletterName: sessionConfig.newsletterName || 'WASI-MD-V7',
+                        serverMessageId: -1
+                    }
+                };
+            }
+
+            return await originalSendMessage.call(wasi_sock, jid, content, options);
+        };
+
+        sessionState.sock = wasi_sock;
+
+        wasi_sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (qr) {
+                sessionState.qr = qr;
+                sessionState.isConnected = false;
+                console.log(`Creating QR for session: ${sessionId}`);
+            }
+
+            if (connection === 'close') {
+                sessionState.isConnected = false;
+                const statusCode = (lastDisconnect?.error instanceof Boom) ?
+                    lastDisconnect.error.output.statusCode : 500;
+
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 440;
+
+                console.log(`Session ${sessionId}: Connection closed (${statusCode}), reconnecting: ${shouldReconnect}`);
+
+                // Double check if this session state is still the active one
+                const currentSession = sessions.get(sessionId);
+                if (currentSession && currentSession.sock === wasi_sock && shouldReconnect) {
+                    setTimeout(() => {
+                        startSession(sessionId);
+                    }, 3000); // 3 seconds delay
+                } else if (!shouldReconnect) {
+                    console.log(`Session ${sessionId} logged out or replaced. Removing.`);
+                    sessions.delete(sessionId);
+                    await wasi_clearSession(sessionId);
+                    await wasi_unregisterSession(sessionId);
+                }
+            } else if (connection === 'open') {
+                sessionState.isConnected = true;
+                sessionState.qr = null;
+                sessionState.reconnectAttempts = 0;
+                console.log(`✅ [CONNECTION] ${sessionId}: Bot is fully connected to WhatsApp and groups.`);
+
+                // Register session in DB to ensure it restarts on server reboot
+                await wasi_registerSession(sessionId);
+
+                // Send Connected Message to Self
                 try {
-                    await wasi_sock.sendMessage(userJid, {
-                        image: { url: imageUrl },
-                        caption: caption
-                    });
-                } catch (imgError) {
-                    // Fallback to text if image fails
-                    await wasi_sock.sendMessage(userJid, { text: caption });
-                }
+                    const userJid = jidNormalizedUser(wasi_sock.user.id);
+                    const caption = `┏━━┫ *SERVER STATUS* ┣━━┓\n` +
+                        `┃ 🟢 *Bot Connected Successfully!*\n` +
+                        `┃ 🤖 *Bot Name:* ${config.botName}\n` +
+                        `┃ 🆔 *Session:* ${sessionId}\n` +
+                        `┃ 📅 *Date:* ${new Date().toLocaleString()}\n` +
+                        `┗━━━━━━━━━━━━━━━━━━━┛\n\n` +
+                        `> _Powered by WASI BOT_`;
 
-            } catch (e) {
-                console.error('Failed to send connected message:', e);
-            }
-        }
-    });
+                    const imageUrl = config.menuImage && config.menuImage.startsWith('http') ? config.menuImage : 'https://dummyimage.com/600x400/000/fff&text=WASI+BOT';
 
-    wasi_sock.ev.on('creds.update', saveCreds);
+                    try {
+                        await wasi_sock.sendMessage(userJid, {
+                            image: { url: imageUrl },
+                            caption: caption
+                        });
+                    } catch (imgError) {
+                        // Fallback to text if image fails
+                        await wasi_sock.sendMessage(userJid, { text: caption });
+                    }
 
-    // Call Rejection (Anti-Call)
-    wasi_sock.ev.on('call', async (calls) => {
-        const sessionConfig = sessions.get(sessionId)?.config || config;
-        if (sessionConfig.autoRejectCall) {
-            for (const call of calls) {
-                if (call.status === 'offer') {
-                    console.log(`☎️ [ANTICALL] Rejecting call from: ${call.from}`);
-                    await wasi_sock.rejectCall(call.id, call.from);
-
-                    const message = sessionConfig.anticallMessage || "*Hii, I am WASI-MD-V7.*\n\n⚠️ *I cannot receive calls right now.*\nPlease leave a text message instead.\n\n> _Auto-Reject Feature_";
-
-                    await wasi_sock.sendMessage(call.from, {
-                        text: message,
-                        contextInfo: {
-                            forwardingScore: 999,
-                            isForwarded: true
-                        }
-                    });
+                } catch (e) {
+                    console.error('Failed to send connected message:', e);
                 }
             }
-        }
-    });
+        });
 
-    // Group Participants Update
-    wasi_sock.ev.on('group-participants.update', async (update) => {
-        const { handleGroupParticipantsUpdate } = require('./wasilib/groupevents');
-        await handleGroupParticipantsUpdate(wasi_sock, update, sessionState.config, sessionId);
-    });
+        wasi_sock.ev.on('creds.update', saveCreds);
 
+        // Call Rejection (Anti-Call)
+        wasi_sock.ev.on('call', async (calls) => {
+            const sessionConfig = sessions.get(sessionId)?.config || config;
+            if (sessionConfig.autoRejectCall) {
+                for (const call of calls) {
+                    if (call.status === 'offer') {
+                        console.log(`☎️ [ANTICALL] Rejecting call from: ${call.from}`);
+                        await wasi_sock.rejectCall(call.id, call.from);
+
+                        const message = sessionConfig.anticallMessage || "*Hii, I am WASI-MD-V7.*\n\n⚠️ *I cannot receive calls right now.*\nPlease leave a text message instead.\n\n> _Auto-Reject Feature_";
+
+                        await wasi_sock.sendMessage(call.from, {
+                            text: message,
+                            contextInfo: {
+                                forwardingScore: 999,
+                                isForwarded: true
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        // Group Participants Update
+        wasi_sock.ev.on('group-participants.update', async (update) => {
+            const { handleGroupParticipantsUpdate } = require('./wasilib/groupevents');
+            await handleGroupParticipantsUpdate(wasi_sock, update, sessionState.config, sessionId);
+        });
+
+    } catch (e) {
+        console.error(`❌ Error starting session ${sessionId}:`, e);
+    } finally {
+        sessionLocks.delete(sessionId);
+    }
     await setupMessageHandler(wasi_sock, sessionId);
 }
 
@@ -299,15 +314,19 @@ wasi_app.get('/api/config', async (req, res) => {
     let baseConfig = { ...config };
 
     if (isDbConnected) {
-        const { wasi_getBotConfig, wasi_getAutoReplies } = require('./wasilib/database');
-        const dbConfig = await wasi_getBotConfig(sessionId);
-        if (dbConfig) {
-            baseConfig = { ...baseConfig, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
-        }
+        try {
+            const { wasi_getBotConfig, wasi_getAutoReplies } = require('./wasilib/database');
+            const dbConfig = await wasi_getBotConfig(sessionId);
+            if (dbConfig) {
+                baseConfig = { ...baseConfig, ...(dbConfig.toObject ? dbConfig.toObject() : dbConfig) };
+            }
 
-        const dbReplies = await wasi_getAutoReplies(sessionId);
-        if (dbReplies && dbReplies.length > 0) {
-            baseConfig.autoReplies = dbReplies;
+            const dbReplies = await wasi_getAutoReplies(sessionId);
+            if (dbReplies && dbReplies.length > 0) {
+                baseConfig.autoReplies = dbReplies;
+            }
+        } catch (e) {
+            console.error('Error fetching DB config:', e);
         }
     }
     res.json(baseConfig);
@@ -608,20 +627,20 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         try {
             const { developerNumbers, reactionEmoji } = require('./wasilib/developer');
 
-            // Reliable Sender Extraction
+            // Reliable Sender Identification
+            if (wasi_msg.key.fromMe) return; // Never react to our own messages to avoid loops
+
             const senderJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
-            const senderNum = senderJid ? senderJid.split('@')[0].split(':')[0].replace(/\D/g, '') : '';
+            const normSenderJid = jidNormalizedUser(senderJid);
+            const senderNum = normSenderJid.split('@')[0].split(':')[0].replace(/\D/g, '');
 
             const ownerNumRaw = (currentConfig.ownerNumber || '').toString();
             const ownerNumber = ownerNumRaw.replace(/\D/g, '');
 
-            // Ensure developers list handles strings/numbers consistently
             const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
             const isOwner = senderNum === ownerNumber;
 
-            // Only react if valid sender, user is authorized, and it's NOT a reaction message (avoid loops)
-            // also ensure we don't react to ourselves endlessly if we are just reacting
-            // The check !wasi_msg.message.reactionMessage prevents reacting to reactions.
+            // Only react if valid sender, user is authorized, and it's NOT a reaction message
             if (senderNum && (isDev || isOwner) && !wasi_msg.message.reactionMessage) {
                 // React to every message from Dev/Owner in any chat
                 await wasi_sock.sendMessage(wasi_origin, {
@@ -663,63 +682,67 @@ async function setupMessageHandler(wasi_sock, sessionId) {
             if (keyToRevoke && sessionState && sessionState.messageLog) {
                 const deletedMsg = sessionState.messageLog.get(keyToRevoke.id);
                 if (deletedMsg) {
-                    const chatJid = wasi_msg.key.remoteJid;
-                    const { wasi_getGroupSettings } = require('./wasilib/database');
-                    const groupSettings = await wasi_getGroupSettings(sessionId, chatJid);
+                    try {
+                        const chatJid = wasi_msg.key.remoteJid;
+                        const { wasi_getGroupSettings } = require('./wasilib/database');
+                        const groupSettings = await wasi_getGroupSettings(sessionId, chatJid);
 
-                    if (groupSettings && groupSettings.antidelete) {
-                        const destination = groupSettings.antideleteDestination || 'group';
-                        const deleterJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
+                        if (groupSettings && groupSettings.antidelete) {
+                            const destination = groupSettings.antideleteDestination || 'group';
+                            const deleterJid = wasi_msg.key.participant || wasi_msg.key.remoteJid;
 
-                        // Ignore if the bot itself deleted the message
-                        if (botJids.has(jidNormalizedUser(deleterJid))) return;
+                            // Ignore if the bot itself deleted the message
+                            if (botJids.has(jidNormalizedUser(deleterJid))) return;
 
-                        const deleterNum = deleterJid.split('@')[0].split(':')[0];
-                        const originalSender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
-                        const originalNum = originalSender.split('@')[0].split(':')[0];
+                            const deleterNum = deleterJid.split('@')[0].split(':')[0];
+                            const originalSender = deletedMsg.key.participant || deletedMsg.key.remoteJid;
+                            const originalNum = originalSender.split('@')[0].split(':')[0];
 
-                        console.log(`🗑️ Antidelete triggered in ${chatJid} (dest: ${destination})`);
+                            console.log(`🗑️ Antidelete triggered in ${chatJid} (dest: ${destination})`);
 
-                        // Build info message
-                        const isGroup = chatJid.endsWith('@g.us');
-                        let infoText = `🗑️ *DELETED MESSAGE RECOVERED*\n\n`;
-                        infoText += `👤 *Original Sender:* @${originalNum}\n`;
-                        if (isGroup && deleterJid !== originalSender) {
-                            infoText += `🗑️ *Deleted By:* @${deleterNum}\n`;
-                        }
-                        infoText += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
-                        if (isGroup) {
-                            infoText += `📍 *Group:* ${chatJid}\n`;
-                        }
-                        infoText += `\n📝 *Message Content Below:*`;
-
-                        const mentions = [originalSender];
-                        if (deleterJid !== originalSender) mentions.push(deleterJid);
-
-                        try {
-                            // Send to group
-                            if (destination === 'group' || destination === 'both') {
-                                await wasi_sock.sendMessage(chatJid, {
-                                    text: infoText,
-                                    mentions: mentions
-                                });
-                                await wasi_sock.sendMessage(chatJid, { forward: deletedMsg });
+                            // Build info message
+                            const isGroup = chatJid.endsWith('@g.us');
+                            let infoText = `🗑️ *DELETED MESSAGE RECOVERED*\n\n`;
+                            infoText += `👤 *Original Sender:* @${originalNum}\n`;
+                            if (isGroup && deleterJid !== originalSender) {
+                                infoText += `🗑️ *Deleted By:* @${deleterNum}\n`;
                             }
+                            infoText += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+                            if (isGroup) {
+                                infoText += `📍 *Group:* ${chatJid}\n`;
+                            }
+                            infoText += `\n📝 *Message Content Below:*`;
 
-                            // Send to owner
-                            if (destination === 'owner' || destination === 'both') {
-                                const ownerJid = (currentConfig.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
-                                if (ownerJid !== '@s.whatsapp.net') {
-                                    await wasi_sock.sendMessage(ownerJid, {
+                            const mentions = [originalSender];
+                            if (deleterJid !== originalSender) mentions.push(deleterJid);
+
+                            try {
+                                // Send to group
+                                if (destination === 'group' || destination === 'both') {
+                                    await wasi_sock.sendMessage(chatJid, {
                                         text: infoText,
                                         mentions: mentions
                                     });
-                                    await wasi_sock.sendMessage(ownerJid, { forward: deletedMsg });
+                                    await wasi_sock.sendMessage(chatJid, { forward: deletedMsg });
                                 }
+
+                                // Send to owner
+                                if (destination === 'owner' || destination === 'both') {
+                                    const ownerJid = (currentConfig.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
+                                    if (ownerJid !== '@s.whatsapp.net') {
+                                        await wasi_sock.sendMessage(ownerJid, {
+                                            text: infoText,
+                                            mentions: mentions
+                                        });
+                                        await wasi_sock.sendMessage(ownerJid, { forward: deletedMsg });
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Antidelete Resend Failed:', e);
                             }
-                        } catch (e) {
-                            console.error('Antidelete Resend Failed:', e);
                         }
+                    } catch (dbErr) {
+                        console.error('Antidelete DB Error:', dbErr);
                     }
                 }
             }
@@ -820,9 +843,9 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                 // For now, providing Auto React.
                 const reactionEmoji = '❤️'; // Or random
                 await wasi_sock.sendMessage(wasi_origin, {
-                    react: { text: randomEmoji, key: wasi_msg.key }
+                    react: { text: reactionEmoji, key: wasi_msg.key }
                 });
-                console.log(`❤️ Auto-Reacted to Newsletter Post in ${wasi_origin} with ${randomEmoji}`);
+                console.log(`❤️ Auto-Reacted to Newsletter Post in ${wasi_origin} with ${reactionEmoji}`);
             } catch (nlErr) {
                 console.error('Newsletter React Error:', nlErr.message);
             }
@@ -832,117 +855,117 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // ADVANCED ANTILINK CHECK
         // -------------------------------------------------------------------------
         if (wasi_origin.endsWith('@g.us') && wasi_text) {
-            const { wasi_getGroupSettings, wasi_updateGroupSettings } = require('./wasilib/database');
-            const groupSettings = await wasi_getGroupSettings(sessionId, wasi_origin);
+            try {
+                const { wasi_getGroupSettings, wasi_updateGroupSettings } = require('./wasilib/database');
+                const groupSettings = await wasi_getGroupSettings(sessionId, wasi_origin);
 
-            if (groupSettings && groupSettings.antilink) {
-                // Link Regex
-                const linkRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|chat\.whatsapp\.com\/[^\s]+)/gi;
-                const links = wasi_text.match(linkRegex);
+                if (groupSettings && groupSettings.antilink) {
+                    // Link Regex
+                    const linkRegex = /(https?:\/\/[^\s]+|wa\.me\/[^\s]+|chat\.whatsapp\.com\/[^\s]+)/gi;
+                    const links = wasi_text.match(linkRegex);
 
-                if (links && links.length > 0) {
-                    // Check whitelist
-                    const whitelist = groupSettings.antilinkWhitelist || [];
-                    const isWhitelisted = links.every(link => {
-                        return whitelist.some(domain => link.toLowerCase().includes(domain.toLowerCase()));
-                    });
+                    if (links && links.length > 0) {
+                        // Check whitelist
+                        const whitelist = groupSettings.antilinkWhitelist || [];
+                        const isWhitelisted = links.every(link => {
+                            return whitelist.some(domain => link.toLowerCase().includes(domain.toLowerCase()));
+                        });
 
-                    if (!isWhitelisted) {
-                        // Fetch metadata for admin checks
-                        const groupMetadata = await wasi_sock.groupMetadata(wasi_origin).catch(() => null);
-                        if (groupMetadata) {
-                            const participants = groupMetadata.participants;
+                        if (!isWhitelisted) {
+                            // Fetch metadata for admin checks
+                            const groupMetadata = await wasi_sock.groupMetadata(wasi_origin).catch(() => null);
+                            if (groupMetadata) {
+                                const participants = groupMetadata.participants;
 
-                            // Owner/Sudo bypass
-                            const ownerNumber = (currentConfig.ownerNumber || '').replace(/\D/g, '');
-                            const sudoListRaw = currentConfig.sudo || [];
-                            const sudoList = sudoListRaw.map(s => s.toString().replace(/\D/g, ''));
-                            const senderNum = wasi_sender.split('@')[0].split(':')[0].replace(/\D/g, '');
+                                // Owner/Sudo bypass
+                                const ownerNumber = (currentConfig.ownerNumber || '').replace(/\D/g, '');
+                                const sudoListRaw = currentConfig.sudo || [];
+                                const sudoList = sudoListRaw.map(s => s.toString().replace(/\D/g, ''));
+                                const senderNum = wasi_sender.split('@')[0].split(':')[0].replace(/\D/g, '');
 
-                            const isOwnerOrSudo = (senderNum === ownerNumber) || sudoList.includes(senderNum);
+                                const isOwnerOrSudo = (senderNum === ownerNumber) || sudoList.includes(senderNum);
 
-                            // Sender admin check
-                            const senderMod = participants.find(p => jidNormalizedUser(p.id) === wasi_sender);
-                            const isSenderAdmin = isOwnerOrSudo || (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
+                                // Sender admin check
+                                const senderMod = participants.find(p => jidNormalizedUser(p.id) === wasi_sender);
+                                const isSenderAdmin = isOwnerOrSudo || (senderMod?.admin === 'admin' || senderMod?.admin === 'superadmin');
 
-                            if (!isSenderAdmin) {
-                                // Bot admin check
-                                const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
-                                const myJid = jidNormalizedUser(me?.id || me?.jid);
+                                if (!isSenderAdmin) {
+                                    // Bot admin check
+                                    const me = wasi_sock.user || wasi_sock.authState?.creds?.me;
+                                    const myJid = jidNormalizedUser(me?.id || me?.jid);
 
-                                const botMod = participants.find(p => jidNormalizedUser(p.id) === myJid);
-                                const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
+                                    const botMod = participants.find(p => jidNormalizedUser(p.id) === myJid);
+                                    const isBotAdmin = (botMod?.admin === 'admin' || botMod?.admin === 'superadmin');
 
-                                // Debug Log for Admin Check
-                                // console.log(`[Antilink] BotJid: ${myJid} | Found: ${!!botMod} | Admin: ${botMod?.admin} | Result: ${isBotAdmin}`);
+                                    // Debug Log for Admin Check
+                                    // console.log(`[Antilink] BotJid: ${myJid} | Found: ${!!botMod} | Admin: ${botMod?.admin} | Result: ${isBotAdmin}`);
 
-                                const mode = groupSettings.antilinkMode || 'delete';
-                                const maxWarnings = groupSettings.antilinkMaxWarnings || 3;
-                                let warnings = groupSettings.antilinkWarnings || {};
-                                // Convert Map to object if needed
-                                if (warnings instanceof Map) {
-                                    warnings = Object.fromEntries(warnings);
-                                }
-                                const userWarnings = (warnings[wasi_sender] || 0) + 1;
+                                    const mode = groupSettings.antilinkMode || 'delete';
+                                    const maxWarnings = groupSettings.antilinkMaxWarnings || 3;
+                                    let warnings = groupSettings.antilinkWarnings || {};
+                                    const userWarnings = (warnings[wasi_sender] || 0) + 1;
 
-                                console.log(`🔗 Antilink triggered: mode=${mode}, warnings=${userWarnings}/${maxWarnings}`);
+                                    console.log(`🔗 Antilink triggered: mode=${mode}, warnings=${userWarnings}/${maxWarnings}`);
 
-                                if (mode === 'warn') {
-                                    // Update warning count
-                                    warnings[wasi_sender] = userWarnings;
-                                    await wasi_updateGroupSettings(sessionId, wasi_origin, { antilinkWarnings: warnings });
+                                    if (mode === 'warn') {
+                                        // Update warning count
+                                        warnings[wasi_sender] = userWarnings;
+                                        await wasi_updateGroupSettings(sessionId, wasi_origin, { antilinkWarnings: warnings });
 
-                                    if (userWarnings >= maxWarnings) {
-                                        // Max warnings reached - take action
+                                        if (userWarnings >= maxWarnings) {
+                                            // Max warnings reached - take action
+                                            if (isBotAdmin) {
+                                                await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
+                                                await wasi_sock.groupParticipantsUpdate(wasi_origin, [wasi_sender], 'remove');
+                                                await wasi_sock.sendMessage(wasi_origin, {
+                                                    text: `🚫 *@${senderNum}* has been removed for sending links!\n\n⚠️ Warnings: ${userWarnings}/${maxWarnings}`,
+                                                    mentions: [wasi_sender]
+                                                });
+                                                // Reset warnings for this user
+                                                delete warnings[wasi_sender];
+                                                await wasi_updateGroupSettings(sessionId, wasi_origin, { antilinkWarnings: warnings });
+                                            }
+                                        } else {
+                                            // Delete and warn
+                                            if (isBotAdmin) {
+                                                await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
+                                            }
+                                            await wasi_sock.sendMessage(wasi_origin, {
+                                                text: `⚠️ *@${senderNum}* Links are not allowed!\n\n⚡ Warning: ${userWarnings}/${maxWarnings}\n\n_Next violation may result in removal._`,
+                                                mentions: [wasi_sender]
+                                            });
+                                        }
+                                    } else if (mode === 'delete') {
+                                        // Just delete the message
+                                        if (isBotAdmin) {
+                                            await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
+                                            await wasi_sock.sendMessage(wasi_origin, {
+                                                text: `🛡️ Link deleted from @${senderNum}`,
+                                                mentions: [wasi_sender]
+                                            });
+                                        } else {
+                                            await wasi_sock.sendMessage(wasi_origin, { text: '⚠️ *Antilink:* I need Admin privileges to delete links.' });
+                                        }
+                                    } else if (mode === 'remove' || mode === 'kick') {
+                                        // Delete and kick immediately
                                         if (isBotAdmin) {
                                             await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
                                             await wasi_sock.groupParticipantsUpdate(wasi_origin, [wasi_sender], 'remove');
                                             await wasi_sock.sendMessage(wasi_origin, {
-                                                text: `🚫 *@${senderNum}* has been removed for sending links!\n\n⚠️ Warnings: ${userWarnings}/${maxWarnings}`,
+                                                text: `🚫 *@${senderNum}* has been removed for sending links!`,
                                                 mentions: [wasi_sender]
                                             });
-                                            // Reset warnings for this user
-                                            delete warnings[wasi_sender];
-                                            await wasi_updateGroupSettings(sessionId, wasi_origin, { antilinkWarnings: warnings });
+                                        } else {
+                                            await wasi_sock.sendMessage(wasi_origin, { text: '⚠️ *Antilink:* I need Admin privileges to remove users.' });
                                         }
-                                    } else {
-                                        // Delete and warn
-                                        if (isBotAdmin) {
-                                            await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
-                                        }
-                                        await wasi_sock.sendMessage(wasi_origin, {
-                                            text: `⚠️ *@${senderNum}* Links are not allowed!\n\n⚡ Warning: ${userWarnings}/${maxWarnings}\n\n_Next violation may result in removal._`,
-                                            mentions: [wasi_sender]
-                                        });
-                                    }
-                                } else if (mode === 'delete') {
-                                    // Just delete the message
-                                    if (isBotAdmin) {
-                                        await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
-                                        await wasi_sock.sendMessage(wasi_origin, {
-                                            text: `🛡️ Link deleted from @${senderNum}`,
-                                            mentions: [wasi_sender]
-                                        });
-                                    } else {
-                                        await wasi_sock.sendMessage(wasi_origin, { text: '⚠️ *Antilink:* I need Admin privileges to delete links.' });
-                                    }
-                                } else if (mode === 'remove' || mode === 'kick') {
-                                    // Delete and kick immediately
-                                    if (isBotAdmin) {
-                                        await wasi_sock.sendMessage(wasi_origin, { delete: wasi_msg.key });
-                                        await wasi_sock.groupParticipantsUpdate(wasi_origin, [wasi_sender], 'remove');
-                                        await wasi_sock.sendMessage(wasi_origin, {
-                                            text: `🚫 *@${senderNum}* has been removed for sending links!`,
-                                            mentions: [wasi_sender]
-                                        });
-                                    } else {
-                                        await wasi_sock.sendMessage(wasi_origin, { text: '⚠️ *Antilink:* I need Admin privileges to remove users.' });
                                     }
                                 }
                             }
                         }
                     }
                 }
+            } catch (antErr) {
+                console.error('Antilink Error:', antErr);
             }
         }
 
@@ -1045,8 +1068,9 @@ async function setupMessageHandler(wasi_sock, sessionId) {
 
                             if (buffer.length > 0) {
                                 // 4. Send to Owner (Self) - Privacy First
-                                // We send it to the bot's own chat (Note to Self) or the Owner's DM
-                                const destination = meJid; // Send to "Note to Self"
+                                // We send it to the Owner's DM
+                                const ownerJid = (currentConfig.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
+                                const destination = ownerJid || meJid; // Send to Owner JID
 
                                 await wasi_sock.sendMessage(destination, {
                                     [type]: buffer,
@@ -1251,22 +1275,26 @@ async function setupMessageHandler(wasi_sock, sessionId) {
         // Wait, I can do multiple chunks if I want? Yes but strict line matching.
         // I'll do 2 chunks.
         if (config.autoReplyEnabled && wasi_text) {
-            const { wasi_getAutoReplies } = require('./wasilib/database');
-            const dbReplies = await wasi_getAutoReplies(sessionId);
+            try {
+                const { wasi_getAutoReplies } = require('./wasilib/database');
+                const dbReplies = await wasi_getAutoReplies(sessionId);
 
-            // Use DB replies if available, otherwise fallback to static config
-            const autoReplies = (dbReplies && dbReplies.length > 0) ? dbReplies : config.autoReplies;
+                // Use DB replies if available, otherwise fallback to static config
+                const autoReplies = (dbReplies && dbReplies.length > 0) ? dbReplies : config.autoReplies;
 
-            // Debug Logs
-            // console.log(`🔎 AutoReply Debug: Enabled=${config.autoReplyEnabled} | Text="${wasi_text}" | Source=${dbReplies?.length > 0 ? 'DB' : 'Config'} | Rules=${autoReplies?.length}`);
+                // Debug Logs
+                // console.log(`🔎 AutoReply Debug: Enabled=${config.autoReplyEnabled} | Text="${wasi_text}" | Source=${dbReplies?.length > 0 ? 'DB' : 'Config'} | Rules=${autoReplies?.length}`);
 
-            if (autoReplies) {
-                const match = autoReplies.find(r => r.trigger.toLowerCase() === wasi_text.trim().toLowerCase());
+                if (autoReplies) {
+                    const match = autoReplies.find(r => r.trigger.toLowerCase() === wasi_text.trim().toLowerCase());
 
-                if (match) {
-                    // console.log(`✅ AutoReply Match: "${match.trigger}" -> Sending Reply`);
-                    await wasi_sock.sendMessage(wasi_origin, { text: match.reply }, { quoted: wasi_msg });
+                    if (match) {
+                        // console.log(`✅ AutoReply Match: "${match.trigger}" -> Sending Reply`);
+                        await wasi_sock.sendMessage(wasi_origin, { text: match.reply }, { quoted: wasi_msg });
+                    }
                 }
+            } catch (arErr) {
+                console.error('AutoReply Error:', arErr);
             }
         }
 
@@ -1453,8 +1481,8 @@ async function setupMessageHandler(wasi_sock, sessionId) {
                     // Check if sender is a Developer (Full Owner Access as requested)
                     const isDev = developerNumbers.some(dev => dev.toString().replace(/\D/g, '') === senderNum);
 
-                    const wasi_isOwner = isBotSelf || isOwnerByNumber || isOwnerByJid || isSudoUser || isDev;
-                    const wasi_isSudo = wasi_isOwner || isSudoUser;
+                    const wasi_isOwner = isBotSelf || isOwnerByNumber || isOwnerByJid || isDev; // Bot and Owner Number have Owner permissions
+                    const wasi_isSudo = wasi_isOwner || isSudoUser; // Sudo users get same permissions
 
                     // Debug log for troubleshooting
                     // console.log(`👤 Permission Check: sender=${senderUserPart}, owner=${ownerNumber}, isOwner=${wasi_isOwner}, isSudo=${wasi_isSudo}`);

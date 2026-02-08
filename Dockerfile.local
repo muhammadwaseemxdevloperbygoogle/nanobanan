@@ -1,0 +1,65 @@
+# ═══════════════════════════════════════════════════════════════════
+#  WASI-MD V7 - Production Docker Image (Local Build)
+# ═══════════════════════════════════════════════════════════════════
+
+FROM node:20-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev
+
+WORKDIR /build
+
+# Copy local source code
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+COPY . .
+
+# ═══════════════════════════════════════════════════════════════════
+#  FINAL PRODUCTION IMAGE (Minimal & Secure)
+# ═══════════════════════════════════════════════════════════════════
+
+FROM node:20-alpine AS production
+
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    ffmpeg \
+    imagemagick \
+    cairo \
+    pango \
+    jpeg \
+    giflib \
+    chromium \
+    dumb-init
+
+# Set Puppeteer to use system Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Create non-root user for security
+RUN addgroup -S wasibot && adduser -S wasibot -G wasibot
+
+WORKDIR /app
+
+# Copy built application from builder stage
+COPY --from=builder --chown=wasibot:wasibot /build ./
+
+# Create necessary directories with proper permissions
+RUN mkdir -p auth_info temp public && \
+    chown -R wasibot:wasibot /app
+
+# Switch to non-root user
+USER wasibot
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/ping', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }).on('error', () => process.exit(1))"
+
+# Expose port
+EXPOSE 3000
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the bot
+CMD ["node", "index.js"]

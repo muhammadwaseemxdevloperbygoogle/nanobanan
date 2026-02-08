@@ -4,7 +4,11 @@ module.exports = {
     category: 'Owner',
     desc: 'View all Sudo users.',
     wasi_handler: async (wasi_sock, wasi_sender, context) => {
-        const { config } = context;
+        const { config, wasi_isOwner, wasi_isSudo, wasi_msg } = context;
+
+        if (!wasi_isOwner && !wasi_isSudo) {
+            return await wasi_sock.sendMessage(wasi_sender, { text: '❌ This command is restricted to Owner/Sudo.' }, { quoted: wasi_msg });
+        }
 
         const sudoList = config.sudo || [];
 

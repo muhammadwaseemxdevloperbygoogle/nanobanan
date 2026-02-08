@@ -1,8 +1,9 @@
 const axios = require('axios');
 
+const config = require('../wasi');
+
 // WASI DEV APIs Configuration
-const WASIDEV_API_BASE = 'https://wasidev-apis-bcceee4d52a4.herokuapp.com';
-// const WASIDEV_API_BASE = 'http://localhost:3000';
+const WASIDEV_API_BASE = config.apiUrl || 'https://wasidev-apis-bcceee4d52a4.herokuapp.com';
 
 /**
  * Call WASI DEV APIs with automatic fallback

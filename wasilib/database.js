@@ -126,10 +126,19 @@ function getModel(sessionId, type) {
     }
 }
 // ---------------------------------------------------------------------------
+// CONNECTION CHECK HELPER
+// ---------------------------------------------------------------------------
+function checkConnection() {
+    if (!isConnected) {
+        throw new Error('Database connection is not active. Please connect to MongoDB first.');
+    }
+}
+
+// ---------------------------------------------------------------------------
 // BOT CONFIG MANAGEMENT
 // ---------------------------------------------------------------------------
 async function wasi_getBotConfig(sessionId) {
-    if (!isConnected) return null;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'BotConfig');
         let config = await Model.findOne({});
@@ -139,19 +148,19 @@ async function wasi_getBotConfig(sessionId) {
         return config;
     } catch (e) {
         console.error('DB Error getBotConfig:', e);
-        return null;
+        throw e;
     }
 }
 
 async function wasi_updateBotConfig(sessionId, updates) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'BotConfig');
         await Model.findOneAndUpdate({}, updates, { upsert: true, new: true });
         return true;
     } catch (e) {
         console.error('DB Error updateBotConfig:', e);
-        return false;
+        throw e;
     }
 }
 
@@ -166,6 +175,24 @@ async function wasi_connectDatabase(dbUrl) {
     if (!uri) {
         console.error('❌ FATAL ERROR: No MONGODB_URI found.');
         return false;
+    }
+
+    // Set up connection listeners once
+    if (mongoose.connection.readyState === 0) {
+        mongoose.connection.on('connected', () => {
+            isConnected = true;
+            console.log('✅ MongoDB connected');
+        });
+
+        mongoose.connection.on('disconnected', () => {
+            isConnected = false;
+            console.log('❌ MongoDB disconnected');
+        });
+
+        mongoose.connection.on('error', (err) => {
+            isConnected = false;
+            console.error('❌ MongoDB connection error:', err);
+        });
     }
 
     try {
@@ -188,7 +215,7 @@ function wasi_isDbConnected() {
 // ---------------------------------------------------------------------------
 
 async function wasi_registerSession(sessionId) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'SessionIndex');
         await Model.findOneAndUpdate(
@@ -199,24 +226,24 @@ async function wasi_registerSession(sessionId) {
         return true;
     } catch (e) {
         console.error('DB Error registerSession:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_unregisterSession(sessionId) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'SessionIndex');
         await Model.findOneAndDelete({ sessionId });
         return true;
     } catch (e) {
         console.error('DB Error unregisterSession:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getAllSessions(sessionId) {
-    if (!isConnected) return [];
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'SessionIndex');
         const sessions = await Model.find({});
@@ -232,7 +259,7 @@ async function wasi_getAllSessions(sessionId) {
 // ---------------------------------------------------------------------------
 
 async function wasi_addBgm(sessionId, trigger, audioUrl, mimetype = 'audio/mp4') {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Bgm');
         await Model.findOneAndUpdate(
@@ -243,24 +270,24 @@ async function wasi_addBgm(sessionId, trigger, audioUrl, mimetype = 'audio/mp4')
         return true;
     } catch (e) {
         console.error('DB Error addBgm:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_deleteBgm(sessionId, trigger) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Bgm');
         const res = await Model.findOneAndDelete({ trigger });
         return !!res;
     } catch (e) {
         console.error('DB Error deleteBgm:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getBgm(sessionId, trigger) {
-    if (!isConnected) return null;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Bgm');
         const bgm = await Model.findOne({ trigger });
@@ -268,23 +295,23 @@ async function wasi_getBgm(sessionId, trigger) {
         return bgm ? { url: bgm.audioUrl, mimetype: bgm.mimetype || 'audio/mp4' } : null;
     } catch (e) {
         console.error('DB Error getBgm:', e);
-        return null;
+        return null; // Return null as usual but could throw
     }
 }
 
 async function wasi_getAllBgms(sessionId) {
-    if (!isConnected) return [];
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Bgm');
         return await Model.find({});
     } catch (e) {
         console.error('DB Error getAllBgms:', e);
-        return [];
+        throw e;
     }
 }
 
 async function wasi_toggleBgm(sessionId, status) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'BgmConfig');
         await Model.findOneAndUpdate(
@@ -295,18 +322,19 @@ async function wasi_toggleBgm(sessionId, status) {
         return true;
     } catch (e) {
         console.error('DB Error toggleBgm:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_isBgmEnabled(sessionId) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'BgmConfig');
         const conf = await Model.findOne({});
         return conf ? conf.isEnabled : true;
     } catch (e) {
-        return false;
+        console.error('DB Error isBgmEnabled:', e);
+        throw e;
     }
 }
 
@@ -315,7 +343,7 @@ async function wasi_isBgmEnabled(sessionId) {
 // ---------------------------------------------------------------------------
 
 async function wasi_setMention(sessionId, data) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Mention');
         // We only store ONE mention reply setting for simplicity like BGM config
@@ -324,39 +352,42 @@ async function wasi_setMention(sessionId, data) {
         return true;
     } catch (e) {
         console.error('DB Error setMention:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getMention(sessionId) {
-    if (!isConnected) return null;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Mention');
         return await Model.findOne({});
     } catch (e) {
-        return null;
+        console.error('DB Error getMention:', e);
+        throw e;
     }
 }
 
 async function wasi_toggleMention(sessionId, status) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'MentionConfig');
         await Model.findOneAndUpdate({}, { isEnabled: status }, { upsert: true, new: true });
         return true;
     } catch (e) {
-        return false;
+        console.error('DB Error toggleMention:', e);
+        throw e;
     }
 }
 
 async function wasi_isMentionEnabled(sessionId) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'MentionConfig');
         const conf = await Model.findOne({});
         return conf ? conf.isEnabled : false;
     } catch (e) {
-        return false;
+        console.error('DB Error isMentionEnabled:', e);
+        throw e;
     }
 }
 
@@ -365,7 +396,7 @@ async function wasi_isMentionEnabled(sessionId) {
 // ---------------------------------------------------------------------------
 
 async function wasi_getGroupSettings(sessionId, jid) {
-    if (!isConnected) return null;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'GroupSettings');
         let settings = await Model.findOne({ jid });
@@ -375,19 +406,19 @@ async function wasi_getGroupSettings(sessionId, jid) {
         return settings;
     } catch (e) {
         console.error('DB Error getGroupSettings:', e);
-        return null;
+        throw e;
     }
 }
 
 async function wasi_updateGroupSettings(sessionId, jid, updates) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'GroupSettings');
         await Model.findOneAndUpdate({ jid }, updates, { upsert: true, new: true });
         return true;
     } catch (e) {
         console.error('DB Error updateGroupSettings:', e);
-        return false;
+        throw e;
     }
 }
 
@@ -396,19 +427,19 @@ async function wasi_updateGroupSettings(sessionId, jid, updates) {
 // ---------------------------------------------------------------------------
 
 async function wasi_isCommandEnabled(sessionId, jid, command) {
-    if (!isConnected) return true;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Toggle');
         const toggle = await Model.findOne({ jid, command });
         return toggle ? toggle.isEnabled : true;
     } catch (e) {
-        console.error('DB Error:', e);
-        return true;
+        console.error('DB Error isCommandEnabled:', e);
+        throw e;
     }
 }
 
 async function wasi_toggleCommand(sessionId, jid, command, status) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Toggle');
         await Model.findOneAndUpdate(
@@ -419,24 +450,24 @@ async function wasi_toggleCommand(sessionId, jid, command, status) {
         return true;
     } catch (e) {
         console.error('DB Error:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getUserAutoStatus(sessionId, jid) {
-    if (!isConnected) return null;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'UserSettings');
         const settings = await Model.findOne({ jid });
         return settings;
     } catch (e) {
-        console.error('DB Error:', e);
-        return null;
+        console.error('DB Error getUserAutoStatus:', e);
+        throw e;
     }
 }
 
 async function wasi_setUserAutoStatus(sessionId, jid, settings) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'UserSettings');
         await Model.findOneAndUpdate(
@@ -447,36 +478,36 @@ async function wasi_setUserAutoStatus(sessionId, jid, settings) {
         return true;
     } catch (e) {
         console.error('DB Error:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getAllAutoStatusUsers(sessionId) {
-    if (!isConnected) return [];
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'UserSettings');
         const users = await Model.find({ autoStatusSeen: true });
         return users.map(u => u.jid);
     } catch (e) {
-        console.error('DB Error:', e);
-        return [];
+        console.error('DB Error getAllAutoStatusUsers:', e);
+        throw e;
     }
 }
 
 async function wasi_getAutoReplies(sessionId) {
-    if (!isConnected) return [];
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'AutoReply');
         const replies = await Model.find({});
         return replies.map(r => ({ trigger: r.trigger, reply: r.reply }));
     } catch (e) {
-        console.error('DB Error:', e);
-        return [];
+        console.error('DB Error getAutoReplies:', e);
+        throw e;
     }
 }
 
 async function wasi_saveAutoReplies(sessionId, replies) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'AutoReply');
         await Model.deleteMany({}); // Clear existing
@@ -486,12 +517,12 @@ async function wasi_saveAutoReplies(sessionId, replies) {
         return true;
     } catch (e) {
         console.error('DB Error:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_addAutoReply(sessionId, trigger, reply) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'AutoReply');
         await Model.findOneAndUpdate(
@@ -502,19 +533,19 @@ async function wasi_addAutoReply(sessionId, trigger, reply) {
         return true;
     } catch (e) {
         console.error('DB Error addAutoReply:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_deleteAutoReply(sessionId, trigger) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'AutoReply');
         await Model.findOneAndDelete({ trigger });
         return true;
     } catch (e) {
         console.error('DB Error deleteAutoReply:', e);
-        return false;
+        throw e;
     }
 }
 
@@ -523,7 +554,7 @@ async function wasi_deleteAutoReply(sessionId, trigger) {
 // ---------------------------------------------------------------------------
 
 async function wasi_getXP(sessionId, jid) {
-    if (!isConnected) return { xp: 0, level: 0, role: 'Novice' };
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Rank');
         let user = await Model.findOne({ jid });
@@ -531,48 +562,51 @@ async function wasi_getXP(sessionId, jid) {
         return user;
     } catch (e) {
         console.error('DB Error getXP:', e);
-        return { xp: 0, level: 0, role: 'Novice' };
+        throw e;
     }
 }
 
 async function wasi_addXP(sessionId, jid, amount) {
-    if (!isConnected) return false;
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Rank');
-        let user = await Model.findOne({ jid });
-        if (!user) user = await Model.create({ jid, xp: 0, level: 0 });
+        // Use findOneAndUpdate with $inc for atomicity (Fixes Race Condition)
+        const user = await Model.findOneAndUpdate(
+            { jid },
+            { $inc: { xp: amount } },
+            { upsert: true, new: true }
+        );
 
-        user.xp += amount;
-        // Simple Level Up Formula: Level = sqrt(XP / 100)
-        // Or XP needed = Level * Level * 100
+        // Calculate Level from updated XP
         const newLevel = Math.floor(Math.sqrt(user.xp / 100));
 
-        let leveledUp = false;
         if (newLevel > user.level) {
             user.level = newLevel;
-            leveledUp = true;
             // Update Roles based on Level (Example)
             if (newLevel >= 50) user.role = 'Titan';
             else if (newLevel >= 25) user.role = 'Legend';
             else if (newLevel >= 10) user.role = 'Pro';
             else if (newLevel >= 5) user.role = 'Apprentice';
+
+            await user.save();
+            return newLevel;
         }
 
-        await user.save();
-        return leveledUp ? newLevel : false;
+        return false;
     } catch (e) {
         console.error('DB Error addXP:', e);
-        return false;
+        throw e;
     }
 }
 
 async function wasi_getLeaderboard(sessionId, limit = 10) {
-    if (!isConnected) return [];
+    checkConnection();
     try {
         const Model = getModel(sessionId, 'Rank');
         return await Model.find({}).sort({ xp: -1 }).limit(limit);
     } catch (e) {
-        return [];
+        console.error('DB Error getLeaderboard:', e);
+        throw e;
     }
 }
 

@@ -2,7 +2,8 @@ module.exports = {
     name: 'alive',
     category: 'General',
     desc: 'Check if the bot is operational',
-    wasi_handler: async (wasi_sock, wasi_sender) => {
+    wasi_handler: async (wasi_sock, wasi_origin, context) => {
+        const { wasi_sender, wasi_msg } = context;
         const os = require('os');
         const config = require('../wasi');
 
@@ -44,20 +45,20 @@ module.exports = {
             const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 8000 });
             const buffer = Buffer.from(response.data);
 
-            await wasi_sock.sendMessage(wasi_sender, {
+            await wasi_sock.sendMessage(wasi_origin, {
                 image: buffer,
                 caption: wasi_status,
                 mentions: [wasi_sender],
                 contextInfo: contextInfo
-            });
+            }, { quoted: wasi_msg });
         } catch (e) {
             console.error('Alive Image Fetch Error:', e.message);
             // Fallback to text if image fails
-            await wasi_sock.sendMessage(wasi_sender, {
+            await wasi_sock.sendMessage(wasi_origin, {
                 text: wasi_status,
                 mentions: [wasi_sender],
                 contextInfo: contextInfo
-            });
+            }, { quoted: wasi_msg });
         }
     }
 };
